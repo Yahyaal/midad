@@ -5,6 +5,7 @@ import { layoutBlock } from '../layout';
 import { type Edit, newBlock } from '../model';
 import { matToSvg } from '../geometry';
 import { nodeFont } from './helpers';
+import { tidyBlock } from '../tidy';
 
 export const EDIT_CASES: [string, string, Record<string, Edit>][] = [
   ['plain', 'يحيى', {}],
@@ -19,6 +20,7 @@ export const EDIT_CASES: [string, string, Record<string, Edit>][] = [
   ['ه swap', 'سهم', { 'c1.0': { swap: 'amiri:4829' } }],
   ['user', 'يحيى', { 'c0.0': { tx: 636, ty: 530, swap: 'amiri:3249' }, 'c1.0': { tx: 80, ty: 265, swap: 'amiri:1756' }, 'c2.0': { tx: 32, ty: 106 } }],
   ['user-swaps', 'يحيى', { 'c0.0': { swap: 'amiri:3249' }, 'c1.0': { swap: 'amiri:1756' } }],
+  ['tidy-before', 'يحيى، سامي، رامي', { 'c0.0': { tx: 636, ty: 530, swap: 'amiri:3249' }, 'c1.0': { tx: 80, ty: 265, swap: 'amiri:1756' }, 'c2.0': { tx: 32, ty: 106 }, 'c7.0': { tx: -15, ty: 218, swap: 'amiri:4260' }, 'c6.0': { tx: 225, swap: 'amiri:2675' }, 'j6.0': { bend: 0.11 } }],
   ['user-move', 'يحيى', { 'c0.0': { tx: 636, ty: 530 }, 'c1.0': { tx: 80, ty: 265 }, 'c2.0': { tx: 32, ty: 106 } }],
 ];
 
@@ -29,7 +31,18 @@ it.skipIf(!process.env.DUMP_DIR)('dump edit sheet', () => {
     const col = i % 5;
     if (process.env.ONLY && !label.startsWith(process.env.ONLY)) return;
     const row = Math.floor(i / 5);
-    const lb = layoutBlock(newBlock({ text, size: 230, align: 'center', x: 190 + col * 380, y: 260 + row * 420, edits }), font);
+    let blk = newBlock({ text, size: label.startsWith('tidy') ? 120 : 230, align: 'center', x: label.startsWith('tidy') ? 950 : 190 + col * 380, y: label.startsWith('tidy') ? 300 : 260 + row * 420, edits });
+    const lb = layoutBlock(blk, font);
+    if (label === 'tidy-before') {
+      for (const [st, y] of [[0.4, 650], [0.7, 950], [1, 1220]] as const) {
+        blk = tidyBlock({ ...blk, y }, font, { strength: st }).block;
+        const lt = layoutBlock(blk, font);
+        for (const g of lt.glyphs) for (const pc of g.pieces) parts.push(`<path transform="${matToSvg(pc.world)}" d="${pc.d}" fill="#3b2514"/>`);
+        for (const j of lt.joins) if (j.d) parts.push(`<path d="${j.d}" fill="${process.env.DEBUG_COLORS ? '#2a7' : '#3b2514'}"/>`);
+        parts.push(`<text x="150" y="${y}" font-size="26" fill="#999">tidy ${st}</text>`);
+        blk = { ...blk, edits: newBlock({ edits }).edits };
+      }
+    }
     const debug = !!process.env.DEBUG_COLORS;
     for (const g of lb.glyphs) for (const pc of g.pieces) parts.push(`<path transform="${matToSvg(pc.world)}" d="${pc.d}" fill="#3b2514"/>`);
     for (const j of lb.joins) if (j.d) parts.push(`<path d="${j.d}" fill="${debug ? '#2a7' : '#3b2514'}"/>`);

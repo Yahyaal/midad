@@ -50,6 +50,19 @@ Scheherazade New has no contextual alternates, so it offers only elongations.
 * Join strokes are drawn only where an edit opened a gap (the font's own hairline gaps stay as designed).
 * **Reconnect word** drops moves/rotations/scales inside a connected group and keeps forms, madd, kashida.
 
+## Tidy (v0.5)
+One button (or `T`) runs five conservative passes over the selection's groups, or the whole composition:
+1. **smooth** – Laplacian smoothing of vertical offsets and rotations along each connected word
+   (keeps the overall rise, removes jagged steps);
+2. **kashida** – a sideways gap between joined letters becomes join `extend`, with later letters
+   compensated so nothing else moves; small leftovers snap to zero;
+3. **forms** – joins still bridging a long gap try both letters' other forms (with neighbour fitting) and
+   keep the set with the shortest bridges, if clearly better;
+4. **spacing** – groups that sit closer than the font's own spacing are pushed apart (reading order);
+5. **dots** – dots dragged further than ~0.45 em are pulled back.
+Everything is plain edits, written as a single undo step. The bar's strength slider re-runs from the
+original and replaces the result in place (still one undo step); *Hold to compare* shows the original.
+
 ## Known limits
 * Pulling letters along steep joins can leave small shards where the pen stroke meets the outline.
 * Elongation is a straight cut, so it suits horizontal strokes (ى ن ب س ص ك), not vertical ones.

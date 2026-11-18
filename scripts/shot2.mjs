@@ -55,6 +55,19 @@ if (scenario === 'drag') {
   await drag(pt, Number(process.env.DX ?? 0), Number(process.env.DY ?? -60));
   await p.mouse.click(5, 300);
 }
+if (scenario === 'tidy' || scenario === 'tidy-before') {
+  await p.waitForFunction(() => localStorage.getItem('midad:last') && localStorage.getItem(`midad:project:${localStorage.getItem('midad:last')}`));
+  await p.evaluate(() => {
+    const id = localStorage.getItem('midad:last');
+    const pr = JSON.parse(localStorage.getItem(`midad:project:${id}`));
+    pr.blocks[0].edits = { 'c0.0': { tx: 636, ty: 530, swap: 'amiri:3249' }, 'c1.0': { tx: 80, ty: 265, swap: 'amiri:1756' }, 'c2.0': { tx: 32, ty: 106 }, 'c7.0': { tx: -15, ty: 218, swap: 'amiri:4260' }, 'c6.0': { tx: 225, swap: 'amiri:2675' }, 'j6.0': { bend: 0.11 } };
+    localStorage.setItem(`midad:project:${id}`, JSON.stringify(pr));
+  });
+  await p.waitForTimeout(800);
+  await p.reload();
+  await p.waitForSelector('[data-piece]');
+  if (scenario === 'tidy') await p.getByRole('button', { name: /Tidy/ }).click();
+}
 if (scenario === 'export') await p.getByRole('button', { name: /Export/ }).click();
 if (scenario === 'gold') {
   await p.getByRole('radio', { name: 'Gold' }).click();

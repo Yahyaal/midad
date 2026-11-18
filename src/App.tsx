@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ElemRef, Project } from './core/model';
 import { uid } from './core/model';
 import {
@@ -17,6 +17,7 @@ import { namesProject, SAMPLES } from './core/samples';
 import { createStore, getEdit, MODES, setEdit, type Store, useStore } from './core/store';
 import { Canvas } from './ui/Canvas';
 import { applyPreview, type Preview } from './ui/VariantPicker';
+import { runTidy, TidyBar, type TidySession, tidyScope } from './ui/TidyBar';
 import { Inspector } from './ui/Inspector';
 import { projectToSvg, svgToPngBlob } from './ui/exporters';
 import { moveEdit, elemInfo } from './ui/selection';
@@ -33,7 +34,12 @@ export default function App() {
   const project = useStore(store, (s) => s.project);
   // hovering a letter form previews it without touching the document or history
   const [preview, setPreview] = useState<Preview | null>(null);
-  const shown = useMemo(() => (preview ? applyPreview(project, preview) : project), [project, preview]);
+  const [tidy, setTidy] = useState<TidySession | null>(null);
+  const [compare, setCompare] = useState(false);
+  const shown = useMemo(() => {
+    if (compare && tidy) return tidy.original;
+    return preview ? applyPreview(project, preview) : project;
+  }, [project, preview, compare, tidy]);
   const { layouts, loading, error } = useLayouts(shown);
   const [toast, setToast] = useState<string | null>(null);
   const [panel, setPanel] = useState<'none' | 'projects' | 'export' | 'help'>('none');
@@ -43,11 +49,34 @@ export default function App() {
     window.setTimeout(() => setToast((t) => (t === m ? null : t)), 2600);
   };
   useAutosave(store, notify);
+  const layoutsRef = useRef(layouts);
+  layoutsRef.current = layouts;
+  const doTidy = useCallback(() => {
+    const original = store.get().project;
+    const scope = tidyScope(store, layoutsRef.current);
+    const strength = tidy?.strength ?? 0.7;
+    const { project: next, report } = runTidy(original, strength, scope.blocks, scope.groups);
+    if (JSON.stringify(next.blocks) === JSON.stringify(original.blocks)) {
+      notify('Already tidy — nothing to change');
+      return;
+    }
+    store.update(() => next);
+    setTidy({ original, strength, report, rev: store.get().rev, blocks: scope.blocks, groups: scope.groups });
+  }, [store, tidy?.strength]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+      if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey && !e.altKey) doTidy();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [doTidy]);
   useShortcuts(store, layouts, notify, () => setPanel('export'));
 
   return (
     <div className="app">
-      <TopBar store={store} onPanel={setPanel} />
+      <TopBar store={store} onPanel={setPanel} onTidy={doTidy} />
       <ModeBar store={store} />
       <main className="workspace">
         <div className="stage">
@@ -55,6 +84,8 @@ export default function App() {
           {error && <div className="error">Font failed to load: {error}</div>}
           <Canvas store={store} layouts={layouts} shownProject={shown} onPreview={setPreview} />
           <ZoomControls />
+          {tidy && <TidyBar store={store} session={tidy} setSession={setTidy} setCompare={setCompare} />}
+          {compare && <div className="canvas-hint">Before tidying</div>}
         </div>
         <aside className={`side${sheetOpen ? ' open' : ''}`}>
           <button type="button" className="sheet-toggle" onClick={() => setSheetOpen((o) => !o)} aria-expanded={sheetOpen}>
@@ -71,7 +102,7 @@ export default function App() {
   );
 }
 
-function TopBar({ store, onPanel }: { store: Store; onPanel: (p: 'projects' | 'export' | 'help') => void }) {
+function TopBar({ store, onPanel, onTidy }: { store: Store; onPanel: (p: 'projects' | 'export' | 'help') => void; onTidy: () => void }) {
   const name = useStore(store, (s) => s.project.name);
   const canUndo = useStore(store, (s) => s.past.length > 0);
   const canRedo = useStore(store, (s) => s.future.length > 0);
@@ -88,6 +119,9 @@ function TopBar({ store, onPanel }: { store: Store; onPanel: (p: 'projects' | 'e
         </button>
         <button type="button" onClick={() => store.redo()} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
           ↷<span className="lbl">Redo</span>
+        </button>
+        <button type="button" className="tidy-btn" onClick={onTidy} title="Tidy (T): smooth jumps, turn gaps into kashida, fix spacing and stray dots. Works on the selection, or everything. One undo restores it.">
+          ✨<span className="lbl">Tidy</span>
         </button>
         <button type="button" onClick={() => onPanel('projects')} title="Projects: open, new, save to file">
           ☰<span className="lbl">Projects</span>
@@ -412,11 +446,12 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
           <li><b>Moving letters smoothly</b>: with <i>Neighbours follow</i> on, joined neighbours come along part of the way (mostly up/down), so the word bends instead of breaking. While dragging, a letter snaps back to its original place, onto the baseline, or into line with a moved neighbour. Hold <kbd>Alt</kbd> to move it alone and without snapping.</li>
           <li><b>Dots &amp; marks</b>: dots (nuqaṭ) and tashkīl move independently of their letter.</li>
           <li><b>Letter forms</b>: when you tap a letter, a strip shows the other shapes the font designer drew for it (and elongated versions of final letters). Hover to preview, click to swap, or press <kbd>[</kbd> <kbd>]</kbd> to cycle. The word re-flows around the new shape, and its neighbours change to the shapes the font pairs with it.</li>
+          <li><b>✨ Tidy</b> (<kbd>T</kbd>) cleans up after free editing while keeping your intent: evens out jumps along each word, turns sideways pulls into kashida, swaps in better-fitting letter forms, restores spacing between words, and brings stray dots back. It works on the selection, or the whole composition when nothing is selected. Use the strength slider, hold <i>Compare</i> to see the before, and <i>Undo tidy</i> (or <kbd>Ctrl</kbd>+<kbd>Z</kbd>) to go back.</li>
           <li><b>Reconnect word</b> (in the panel for a letter or group) puts a pulled-apart word back together while keeping the forms, elongations and kashidas you chose.</li>
         </ul>
         <h4>Keys</h4>
         <ul className="keys">
-          <li><kbd>[</kbd> <kbd>]</kbd> previous / next form of the selected letter</li>
+          <li><kbd>[</kbd> <kbd>]</kbd> previous / next form of the selected letter · <kbd>T</kbd> Tidy</li>
           <li><kbd>1</kbd>–<kbd>5</kbd> selection level · <kbd>Shift</kbd>+click add to selection</li>
           <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> redo</li>
           <li>Arrows nudge (<kbd>Shift</kbd> ×10) · <kbd>Delete</kbd> reset selection · <kbd>Esc</kbd> deselect</li>

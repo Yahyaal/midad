@@ -198,3 +198,76 @@ test('Reconnect word closes gaps but keeps the chosen letter form', async ({ pag
   expect(e['c0.0']).toEqual({ swap: swapped });
   expect(Object.keys(e).every((k) => !e[k].tx && !e[k].ty)).toBe(true);
 });
+
+const MESSY = {
+  'c0.0': { tx: 636, ty: 530, swap: 'amiri:3249' },
+  'c1.0': { tx: 80, ty: 265, swap: 'amiri:1756' },
+  'c2.0': { tx: 32, ty: 106 },
+  'c7.0': { tx: -15, ty: 218, swap: 'amiri:4260' },
+  'c6.0': { tx: 225, swap: 'amiri:2675' },
+  'j6.0': { bend: 0.11 },
+};
+
+async function loadMessy(page: import('@playwright/test').Page) {
+  await page.evaluate((edits) => {
+    const id = localStorage.getItem('midad:last')!;
+    const p = JSON.parse(localStorage.getItem(`midad:project:${id}`)!);
+    p.blocks[0].edits = edits;
+    localStorage.setItem(`midad:project:${id}`, JSON.stringify(p));
+  }, MESSY);
+  await page.reload();
+  await expect(page.locator('[data-join]').first()).toBeVisible();
+}
+
+test('Tidy cleans up in one step; compare, strength and undo all work', async ({ page }) => {
+  await savedProject(page);
+  await loadMessy(page);
+  const steep = () =>
+    page.$$eval('[data-join]', (els) =>
+      els.reduce((a, e) => {
+        const r = e.getBoundingClientRect();
+        return a + r.height;
+      }, 0),
+    );
+  const before = await steep();
+  const pieceBefore = await page.locator('[data-piece="c1.0"]').getAttribute('transform');
+
+  await page.getByRole('button', { name: /Tidy/ }).click();
+  await expect(page.locator('.tidy-bar')).toBeVisible();
+  await expect(page.locator('.tidy-report')).not.toHaveText(/nothing/);
+  expect(await steep()).toBeLessThan(before * 0.7);
+
+  // hold to compare shows the original
+  const cmp = page.getByRole('button', { name: 'Hold to compare' });
+  const box = (await cmp.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await expect(page.locator('[data-piece="c1.0"]')).toHaveAttribute('transform', pieceBefore!);
+  await page.mouse.up();
+  await expect(page.locator('[data-piece="c1.0"]')).not.toHaveAttribute('transform', pieceBefore!);
+
+  // strength changes keep a single undo step
+  await page.getByLabel('Tidy strength').fill('1');
+  await page.waitForTimeout(200);
+  await expect(page.locator('.tidy-bar')).toBeVisible();
+
+  await page.getByRole('button', { name: /Undo tidy/ }).click();
+  await expect(page.locator('.tidy-bar')).toHaveCount(0);
+  await expect(page.locator('[data-piece="c1.0"]')).toHaveAttribute('transform', pieceBefore!);
+  const e = (await savedProject(page)).blocks[0].edits;
+  expect(e).toEqual(MESSY);
+
+  // and the regular undo/redo cycle works too
+  await page.keyboard.press('t');
+  await expect(page.locator('.tidy-bar')).toBeVisible();
+  await page.keyboard.press('Control+z');
+  expect((await savedProject(page)).blocks[0].edits).toEqual(MESSY);
+  await page.keyboard.press('Control+Shift+z');
+  expect((await savedProject(page)).blocks[0].edits).not.toEqual(MESSY);
+});
+
+test('Tidy on a clean composition changes nothing', async ({ page }) => {
+  await page.getByRole('button', { name: /Tidy/ }).click();
+  await expect(page.locator('.toast')).toContainText('Already tidy');
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+});
