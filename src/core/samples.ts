@@ -13,17 +13,17 @@ export function stackedProject(): Project {
   const p = newProject('Stacked names', [
     newBlock({
       text: 'يحيى',
-      x: 800,
-      y: 430,
-      size: 300,
+      x: 860,
+      y: 360,
+      size: 330,
       edits: {
-        'c3.0': { stretch: 260, cut: 0.42 },
-        'j2.0': { bend: 0.12 },
-        'c0.0.d1': { tx: -40, ty: 10 },
+        'c3.0': { stretch: 520, cut: 0.42 },
+        'c0.0': { ty: 40, rot: -4 },
+        'c0.0.d1': { tx: 60, ty: 10 },
       },
     }),
-    newBlock({ text: 'سامي', x: 1180, y: 700, size: 170, edits: { 'j0.0': { extend: 180, bend: 0.08 } } }),
-    newBlock({ text: 'رامي', x: 470, y: 700, size: 170, edits: { 'c2.0': { stretch: 120 } } }),
+    newBlock({ text: 'سامي', x: 1100, y: 700, size: 165, edits: { 'j2.0': { extend: 240, bend: 0.05 } } }),
+    newBlock({ text: 'رامي', x: 560, y: 715, size: 165, edits: { 'c3.0': { stretch: 160 }, w0: { rot: -3 } } }),
   ]);
   p.ink = { ...p.ink, style: 'wet' };
   return p;

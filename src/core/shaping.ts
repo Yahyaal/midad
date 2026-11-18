@@ -1,7 +1,7 @@
 // HarfBuzz shaping of a block's text into logical-order glyph runs.
 import * as hb from 'harfbuzzjs';
 import type { LoadedFont } from './fonts';
-import { joinType } from './arabic';
+import { hasArabic, joinType } from './arabic';
 
 export interface ShapedGlyph {
   gid: number;
@@ -50,9 +50,13 @@ export function shapeText(font: LoadedFont, text: string, features: FeatureRange
     if (end < 0) end = text.length;
     const buf = new hb.Buffer();
     buf.addText(text, start, end - start);
-    buf.setDirection(hb.Direction.RTL);
-    buf.setScript('Arab');
-    buf.setLanguage('ar');
+    if (hasArabic(text.slice(start, end)) || start === end) {
+      buf.setDirection(hb.Direction.RTL);
+      buf.setScript('Arab');
+      buf.setLanguage('ar');
+    } else {
+      buf.guessSegmentProperties();
+    }
     buf.setClusterLevel(hb.ClusterLevel.MONOTONE_CHARACTERS);
     hb.shape(font.font, buf, hbFeatures);
     const infos = buf.getGlyphInfosAndPositions();
@@ -76,7 +80,8 @@ export function shapeText(font: LoadedFont, text: string, features: FeatureRange
       });
       x += g.xAdvance ?? 0;
     }
-    const logical = visual.reverse();
+    const rtl = hasArabic(text.slice(start, end)) || start === end;
+    const logical = rtl ? visual.reverse() : visual;
     const seen = new Map<number, number>();
     for (const g of logical) {
       const k = seen.get(g.cluster) ?? 0;
