@@ -16,11 +16,9 @@ import {
   contoursToD,
   cubicPoint,
   det,
-  distToPolys,
   EMPTY_BBOX,
   flattenContour,
   IDENTITY,
-  insideShape,
   lerp,
   rotate,
   scale,
@@ -38,7 +36,9 @@ import {
   joinKey,
   wordKey,
 } from './model';
-import { type FeatureRange, parseFeature, shapeText, type ShapedGlyph, type ShapedLine } from './shaping';
+import { contact, anchorsInContext, swapOffset } from './anchors';
+import { formAnchors, joinPosition } from './variants';
+import { applySwaps, type FeatureRange, parseFeature, shapeText, type ShapedGlyph, type ShapedLine } from './shaping';
 
 export interface LaidPiece {
   key: string; // glyph key or dot key
@@ -148,133 +148,6 @@ function applyPointEdits(o: GlyphOutline, points: Record<string, [number, number
   );
 }
 
-interface JoinContact {
-  /** centre of the stroke cross-section at the join, block-local natural coords */
-  c: Pt;
-  /** half of the cross-section vector (from c to one edge of the stroke) */
-  h: Pt;
-  /** thinnest ink chord of A (resp. B) alone through c, as two offsets from c */
-  chordA: [Pt, Pt] | null;
-  chordB: [Pt, Pt] | null;
-}
-
-const contactCache = new Map<string, JoinContact>();
-
-/**
- * Find where glyph A hands over to glyph B and the cross-section of the ink
- * stroke there. Works for baseline joins and for stacked contextual forms.
- */
-function contact(font: LoadedFont, a: ShapedGlyph, b: ShapedGlyph, oa: Pt, ob: Pt): JoinContact {
-  const key = `${font.info.id}:${a.gid}:${b.gid}:${Math.round(ob[0] - oa[0])}:${Math.round(ob[1] - oa[1])}`;
-  let hit = contactCache.get(key);
-  if (!hit) {
-    hit = computeContact(font, a.gid, b.gid, [ob[0] - oa[0], ob[1] - oa[1]]);
-    contactCache.set(key, hit);
-  }
-  return { c: [hit.c[0] + oa[0], hit.c[1] + oa[1]], h: hit.h, chordA: hit.chordA, chordB: hit.chordB };
-}
-
-function computeContact(font: LoadedFont, gidA: number, gidB: number, rel: Pt): JoinContact {
-  const A = font.outline(gidA);
-  const B = font.outline(gidB);
-  const polysA = (A.pieces[0]?.contours ?? []).map((i) => A.polys[i]);
-  const polysB = (B.pieces[0]?.contours ?? []).map((i) => B.polys[i].map(([x, y]) => [x + rel[0], y + rel[1]] as Pt));
-  const upem = font.upem;
-  const tol = upem * 0.012;
-  const pts: Pt[] = [];
-  for (const poly of polysA) for (const p of poly) if (insideShape(p, polysB) || distToPolys(p, polysB) < tol) pts.push(p);
-  for (const poly of polysB) for (const p of poly) if (insideShape(p, polysA) || distToPolys(p, polysA) < tol) pts.push(p);
-  const fallbackH: Pt = [0, font.kashidaThickness / 2];
-  if (!pts.length) {
-    const left = polysA.flat().reduce((best, p) => (p[0] < best[0] ? p : best), [Infinity, 0] as Pt);
-    return { c: Number.isFinite(left[0]) ? left : [0, font.kashidaY], h: fallbackH, chordA: null, chordB: null };
-  }
-  let c: Pt = [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
-  const inside = (p: Pt) => insideShape(p, polysA) || insideShape(p, polysB);
-  if (!inside(c)) {
-    // nearest contact point that lies inside the ink
-    let best: Pt | null = null;
-    let bd = Infinity;
-    for (const p of pts) {
-      for (const [ox, oy] of [[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]]) {
-        const q: Pt = [p[0] + ox, p[1] + oy];
-        const d = Math.hypot(q[0] - c[0], q[1] - c[1]);
-        if (d < bd && inside(q)) {
-          bd = d;
-          best = q;
-        }
-      }
-    }
-    if (!best) return { c, h: fallbackH, chordA: null, chordB: null };
-    c = best;
-  }
-  // Thinnest chord through c = stroke cross-section.
-  const step = upem * 0.004;
-  const maxLen = upem * 0.35;
-  let bestLen = Infinity;
-  let bestSeg: [Pt, Pt] = [
-    [c[0], c[1] - fallbackH[1]],
-    [c[0], c[1] + fallbackH[1]],
-  ];
-  for (let deg = 0; deg < 180; deg += 7.5) {
-    const r = (deg * Math.PI) / 180;
-    const dir: Pt = [Math.cos(r), Math.sin(r)];
-    const march = (sgn: number) => {
-      let t = 0;
-      while (t < maxLen) {
-        const q: Pt = [c[0] + dir[0] * (t + step) * sgn, c[1] + dir[1] * (t + step) * sgn];
-        if (!inside(q)) break;
-        t += step;
-      }
-      return t;
-    };
-    const t1 = march(1);
-    const t2 = march(-1);
-    const len = t1 + t2;
-    if (len < bestLen) {
-      bestLen = len;
-      bestSeg = [
-        [c[0] + dir[0] * t1, c[1] + dir[1] * t1],
-        [c[0] - dir[0] * t2, c[1] - dir[1] * t2],
-      ];
-    }
-  }
-  const mid: Pt = [(bestSeg[0][0] + bestSeg[1][0]) / 2, (bestSeg[0][1] + bestSeg[1][1]) / 2];
-  let h: Pt = [(bestSeg[0][0] - bestSeg[1][0]) / 2, (bestSeg[0][1] - bestSeg[1][1]) / 2];
-  // keep a minimum thickness so hairline joins stay visible
-  const minHalf = font.kashidaThickness * 0.3;
-  const hl = Math.hypot(h[0], h[1]);
-  if (hl < minHalf) h = hl > 0 ? [(h[0] / hl) * minHalf, (h[1] / hl) * minHalf] : [0, minHalf];
-  // canonical orientation: h points "up" (or right)
-  if (h[1] < 0 || (h[1] === 0 && h[0] < 0)) h = [-h[0], -h[1]];
-  // thinnest chord of each glyph alone through the recentred point
-  const chord = (polys: Pt[][]): [Pt, Pt] | null => {
-    let best: [Pt, Pt] | null = null;
-    let bl = Infinity;
-    for (let deg = 0; deg < 180; deg += 7.5) {
-      const r = (deg * Math.PI) / 180;
-      const dir: Pt = [Math.cos(r), Math.sin(r)];
-      const ts = [1, -1].map((sgn) => {
-        let t = 0;
-        while (t < maxLen && insideShape([mid[0] + dir[0] * (t + step) * sgn, mid[1] + dir[1] * (t + step) * sgn], polys)) t += step;
-        return t;
-      });
-      const len = ts[0] + ts[1];
-      if (len > 0 && len < bl) {
-        bl = len;
-        best = [
-          [dir[0] * ts[0], dir[1] * ts[0]],
-          [-dir[0] * ts[1], -dir[1] * ts[1]],
-        ];
-      }
-    }
-    return best;
-  };
-  const chordA = chord(polysA);
-  const chordB = chord(polysB);
-  return { c: mid, h, chordA, chordB };
-}
-
 const smooth = (x: number) => x * x * (3 - 2 * x);
 
 export interface PenSpec {
@@ -367,6 +240,30 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
     for (const f of e.alt.split(',')) features.push(parseFeature(f, cl, cl + 1));
   }
   const lines = shapeText(font, text, features);
+  const swaps = new Map<string, number>();
+  for (const [key, e] of Object.entries(block.edits)) {
+    if (!e.swap) continue;
+    const [fid, gid] = e.swap.split(':');
+    if (fid === font.info.id && Number.isFinite(Number(gid))) swaps.set(key, Number(gid));
+  }
+  // Place each swapped form where the original joined its neighbours.
+  const offsets = new Map<string, Pt>();
+  for (const line of lines) {
+    const bases = line.glyphs.filter((g) => !g.isMark);
+    bases.forEach((g, i) => {
+      const key = glyphKey(g.cluster, g.k);
+      const gid = swaps.get(key);
+      if (gid === undefined || gid === g.gid) return;
+      const pos = joinPosition(text, g.cluster);
+      const prev = pos === 'fina' || pos === 'medi' ? bases[i - 1] : undefined;
+      const next = pos === 'init' || pos === 'medi' ? bases[i + 1] : undefined;
+      const fresh = formAnchors(font, text[g.cluster], pos, gid);
+      if (!fresh) return;
+      const off = swapOffset(anchorsInContext(font, g, prev, next), fresh);
+      if (off) offsets.set(key, off);
+    });
+  }
+  applySwaps(font, lines, swaps, offsets);
   const upem = font.upem;
   const k = block.size / upem;
   const edits = block.edits;
@@ -599,8 +496,8 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
       const fb = pb.stretch.f ?? ((x: number, y: number): Pt => [x, y]);
       const gA = glyphs.find((g) => g.key === pa.key)!;
       const gB = glyphs.find((g) => g.key === pb.key)!;
-      const qa = toA(cNat.c);
-      const qb = toB(cNat.c);
+      const qa = toA(cNat.cA);
+      const qb = toB(cNat.cB);
       const PA = apply(gA.world, fa(qa[0], qa[1]));
       const PB = apply(gB.world, fb(qb[0], qb[1]));
       const sA = Math.sqrt(Math.abs(det(localOf.get(pa.key) ?? IDENTITY)));
@@ -611,10 +508,10 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
         angle: info.nibAngle + blockAngle,
         min: 0.35,
       };
-      const capFor = (chord: [Pt, Pt] | null, toLocal: (p: Pt) => Pt, f: PointFn, world: Mat): [Pt, Pt] | null => {
+      const capFor = (chord: [Pt, Pt] | null, at: Pt, toLocal: (p: Pt) => Pt, f: PointFn, world: Mat): [Pt, Pt] | null => {
         if (!chord) return null;
         const m = (o: Pt) => {
-          const q = toLocal([cNat.c[0] + o[0], cNat.c[1] + o[1]]);
+          const q = toLocal([at[0] + o[0], at[1] + o[1]]);
           return apply(world, f(q[0], q[1]));
         };
         return [m(chord[0]), m(chord[1])];
@@ -627,8 +524,8 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
         pen,
         je.bend ?? 0,
         je.weight ?? 1,
-        capFor(cNat.chordA, toA, fa, gA.world),
-        capFor(cNat.chordB, toB, fb, gB.world),
+        capFor(cNat.chordA, cNat.cA, toA, fa, gA.world),
+        capFor(cNat.chordB, cNat.cB, toB, fb, gB.world),
       );
       const len = Math.hypot(PB[0] - PA[0], PB[1] - PA[1]);
       const bend = je.bend ?? 0;

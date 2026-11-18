@@ -95,3 +95,36 @@ export function shapeText(font: LoadedFont, text: string, features: FeatureRange
   }
   return lines;
 }
+
+/**
+ * Replace glyphs chosen by the user ("swap" edits) and re-flow the line so the
+ * swapped letter keeps its left edge and the letters before it make room.
+ */
+export function applySwaps(font: LoadedFont, lines: ShapedLine[], swaps: Map<string, number>, offsets = new Map<string, [number, number]>()) {
+  if (!swaps.size) return;
+  for (const line of lines) {
+    const gs = line.glyphs; // logical order
+    for (let i = 0; i < gs.length; i++) {
+      const g = gs[i];
+      const gid = swaps.get(`c${g.cluster}.${g.k}`);
+      if (gid === undefined || g.isMark || gid === g.gid) continue;
+      const off = offsets.get(`c${g.cluster}.${g.k}`);
+      if (off) {
+        // joined letter: align the new form's entry/exit with the old one's, neighbours stay put
+        g.gid = gid;
+        g.x += off[0];
+        g.y += off[1];
+        continue;
+      }
+      const adv = font.font.glyphHAdvance(gid);
+      const d = adv - g.advance;
+      g.gid = gid;
+      g.advance = adv;
+      // glyphs logically before this one sit to its right: push them right
+      for (let j = 0; j < i; j++) gs[j].x += d;
+      // marks attached to this letter (later in logical order, same cluster) move with its right edge
+      for (let j = i + 1; j < gs.length && gs[j].isMark && gs[j].cluster === g.cluster; j++) gs[j].x += d;
+      line.width += d;
+    }
+  }
+}

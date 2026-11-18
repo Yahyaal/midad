@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { type BBox, type Pt, apply, applyVec, bboxCenter, invert } from '../core/geometry';
 import type { LaidBlock } from '../core/layout';
-import { type Edit, type ElemRef, refId } from '../core/model';
+import { type Edit, type ElemRef, type Project, refId } from '../core/model';
+import { type Preview, useVariants, VariantPicker } from './VariantPicker';
 import { getEdit, sameRef, setEdit, type Store, useStore } from '../core/store';
 import { Artwork } from './Artwork';
 import {
@@ -40,8 +41,20 @@ interface Gesture {
   pinch?: { a: Pt; b: Pt; ids: [number, number]; onSelection: boolean };
 }
 
-export function Canvas({ store, layouts }: { store: Store; layouts: Map<string, LaidBlock> }) {
-  const project = useStore(store, (s) => s.project);
+export function Canvas({
+  store,
+  layouts,
+  shownProject,
+  onPreview,
+}: {
+  store: Store;
+  layouts: Map<string, LaidBlock>;
+  /** the project as displayed (may include a hover preview) */
+  shownProject?: Project;
+  onPreview?: (p: Preview | null) => void;
+}) {
+  const realProject = useStore(store, (s) => s.project);
+  const project = shownProject ?? realProject;
   const selection = useStore(store, (s) => s.selection);
   const mode = useStore(store, (s) => s.mode);
   const showGuides = useStore(store, (s) => s.showGuides);
@@ -55,6 +68,7 @@ export function Canvas({ store, layouts }: { store: Store; layouts: Map<string, 
   const pointers = useRef(new Map<number, Pt>());
   const [hover, setHover] = useState<ElemRef | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const layoutsRef = useRef(layouts);
   layoutsRef.current = layouts;
 
@@ -249,6 +263,7 @@ export function Canvas({ store, layouts }: { store: Store; layouts: Map<string, 
     const dv: Pt = [cur[0] - g.start[0], cur[1] - g.start[1]];
     const sc = toScreen(e.clientX, e.clientY);
     if (!g.moved && Math.hypot(sc[0] - g.startScreen[0], sc[1] - g.startScreen[1]) < 3) return;
+    if (!g.moved && g.type !== 'pan') setDragging(true);
     g.moved = true;
     switch (g.type) {
       case 'pan': {
@@ -337,6 +352,7 @@ export function Canvas({ store, layouts }: { store: Store; layouts: Map<string, 
     if (g && (e.pointerId === g.pointerId || g.type === 'pinch')) {
       if (g.type === 'pinch' && pointers.current.size > 0) return;
       gesture.current = null;
+      setDragging(false);
       store.endGesture();
     }
   };
@@ -383,6 +399,8 @@ export function Canvas({ store, layouts }: { store: Store; layouts: Map<string, 
   const bb = selectionBBox(layouts, selection);
   const hoverBox = hover && !selection.some((r) => sameRef(r, hover)) ? elemInfo(layouts, hover)?.bbox : null;
   const single = selection.length === 1 ? selection[0] : null;
+  const letterSel = single && single.kind === 'glyph' && mode === 'letter' && !curveEdit ? single : null;
+  const variants = useVariants(realProject, letterSel);
   const showTransformHandles = bb && selection.length > 0 && !selection.every((r) => r.kind === 'join');
 
   return (
@@ -420,6 +438,15 @@ export function Canvas({ store, layouts }: { store: Store; layouts: Map<string, 
         </g>
       </svg>
       {hint && <div className="canvas-hint">{hint}</div>}
+      {letterSel && bb && variants.length > 1 && !dragging && (
+        <div
+          className="variant-float"
+          style={floatStyle(bb, view, wrapRef.current)}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <VariantPicker store={store} project={realProject} r={letterSel} variants={variants} onPreview={onPreview ?? (() => {})} layout="strip" />
+        </div>
+      )}
     </div>
   );
 }
@@ -434,6 +461,21 @@ function nearbyHit(x: number, y: number) {
     }
   }
   return null;
+}
+
+/** Place the forms strip above the selection (or below it when there is no room), inside the canvas. */
+function floatStyle(b: BBox, v: View, wrap: HTMLDivElement | null): React.CSSProperties {
+  const W = wrap?.clientWidth ?? 800;
+  const cx = v.x + ((b.x0 + b.x1) / 2) * v.z;
+  const top = v.y + b.y0 * v.z;
+  const bottom = v.y + b.y1 * v.z;
+  const above = top > 150;
+  const ty = above ? '-100%' : '0';
+  const base: React.CSSProperties = { top: above ? top - 50 : bottom + 18, maxWidth: W - 16 };
+  // keep the strip on screen: hug the nearer edge when the letter is close to it
+  if (cx > W - 220) return { ...base, right: 8, transform: `translateY(${ty})` };
+  if (cx < 220) return { ...base, left: 8, transform: `translateY(${ty})` };
+  return { ...base, left: cx, transform: `translate(-50%, ${ty})` };
 }
 
 function clampZoom(z: number) {

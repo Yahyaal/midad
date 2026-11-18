@@ -3,7 +3,7 @@
 import { chromium, devices } from '@playwright/test';
 const [out, scenario] = process.argv.slice(2);
 const b = await chromium.launch();
-const ctx = scenario === 'mobile' ? await b.newContext({ ...devices['Pixel 7'] }) : await b.newContext({ viewport: { width: 1440, height: 900 } });
+const ctx = scenario.includes('mobile') ? await b.newContext({ ...devices['Pixel 7'] }) : await b.newContext({ viewport: { width: 1440, height: 900 } });
 const p = await ctx.newPage();
 await p.goto('http://localhost:5179/');
 await p.evaluate(() => localStorage.clear());
@@ -35,6 +35,17 @@ if (scenario === 'compose') {
   await drag(await center(p.locator('[data-handle="stretch"]')), -90, 0);
   pt = await pointOn('c9.0'); await p.mouse.click(pt.x, pt.y);
   await drag(await center(p.locator('circle.join-handle').first()), -60, 12);
+}
+if (scenario === 'forms' || scenario === 'forms-mobile') {
+  await zoom(Number(process.env.ZOOM ?? (scenario === 'forms' ? 2 : 1)));
+  await p.getByRole('button', { name: scenario === 'forms' ? /Letter/ : /حرف/ }).click();
+  const pt = await pointOn(process.env.KEY || 'c1.0'); await p.mouse.click(pt.x, pt.y);
+  await p.waitForSelector('.variant-float .variant');
+  const n = Number(process.env.PICK || 0);
+  if (n) {
+    const b = p.locator('.variant-float .variant').nth(n);
+    if (process.env.HOVER) await b.hover(); else await b.click();
+  }
 }
 if (scenario === 'export') await p.getByRole('button', { name: /Export/ }).click();
 if (scenario === 'gold') {

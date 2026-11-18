@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { findAlternates, stylisticFeatures } from '../core/alternates';
+import { stylisticFeatures } from '../core/alternates';
+import { type Preview, useVariants, VariantPicker } from './VariantPicker';
 import { FONTS, getLoadedFont } from '../core/fonts';
 import { type Pt, applyVec, det, invert } from '../core/geometry';
 import type { LaidBlock } from '../core/layout';
@@ -17,14 +17,14 @@ const KIND_LABEL: Record<string, string> = {
   join: 'Join stroke',
 };
 
-export function Inspector({ store, layouts }: { store: Store; layouts: Map<string, LaidBlock> }) {
+export function Inspector({ store, layouts, onPreview }: { store: Store; layouts: Map<string, LaidBlock>; onPreview?: (p: Preview | null) => void }) {
   const project = useStore(store, (s) => s.project);
   const selection = useStore(store, (s) => s.selection);
   const blockId = selection[0]?.block ?? (project.blocks.length === 1 ? project.blocks[0].id : undefined);
   const block = project.blocks.find((b) => b.id === blockId);
   return (
     <div className="inspector">
-      {selection.length > 0 ? <SelectionPanel store={store} layouts={layouts} project={project} selection={selection} /> : <EmptyHint />}
+      {selection.length > 0 ? <SelectionPanel store={store} layouts={layouts} project={project} selection={selection} onPreview={onPreview} /> : <EmptyHint />}
       {block && <BlockPanel store={store} block={block} layouts={layouts} />}
       <BlocksList store={store} project={project} activeId={blockId} />
       <InkPanel store={store} project={project} />
@@ -68,7 +68,19 @@ function describe(ref: ElemRef, layouts: Map<string, LaidBlock>, project: Projec
   return '';
 }
 
-function SelectionPanel({ store, layouts, project, selection }: { store: Store; layouts: Map<string, LaidBlock>; project: Project; selection: ElemRef[] }) {
+function SelectionPanel({
+  store,
+  layouts,
+  project,
+  selection,
+  onPreview,
+}: {
+  store: Store;
+  layouts: Map<string, LaidBlock>;
+  project: Project;
+  selection: ElemRef[];
+  onPreview?: (p: Preview | null) => void;
+}) {
   const single = selection.length === 1 ? selection[0] : null;
   const curveEdit = useStore(store, (s) => s.curveEdit);
   const update = (fn: (e: Edit, ref: ElemRef) => Edit, record = true) => store.update((p) => selection.reduce((acc, r) => setEdit(acc, r, fn(getEdit(acc, r), r)), p), { record });
@@ -147,7 +159,7 @@ function SelectionPanel({ store, layouts, project, selection }: { store: Store; 
               Reset outline points
             </button>
           )}
-          <AlternatesPicker store={store} r={single} project={project} />
+          <FormsSection store={store} r={single} project={project} onPreview={onPreview} />
         </>
       )}
     </Section>
@@ -177,42 +189,16 @@ function JoinPanel({ store, r, project, label }: { store: Store; r: ElemRef; pro
   );
 }
 
-function AlternatesPicker({ store, r, project }: { store: Store; r: ElemRef; project: Project }) {
-  const block = project.blocks.find((b) => b.id === r.block)!;
-  const font = getLoadedFont(block.font);
-  const cluster = Number(r.key.slice(1).split('.')[0]);
-  const current = block.edits[r.key]?.alt ?? '';
-  // only recompute when the text/features/alternates change
-  const sig = `${block.text}|${block.font}|${block.features.join()}|${Object.entries(block.edits)
-    .filter(([, e]) => e.alt)
-    .map(([k, e]) => k + e.alt)
-    .join()}`;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const alts = useMemo(() => (font ? findAlternates(font, block, cluster) : []), [font, sig, cluster]);
-  if (alts.length < 2) return <p className="muted small">No alternate forms for this letter in {font?.info.name ?? 'this font'}.</p>;
+function FormsSection({ store, r, project, onPreview }: { store: Store; r: ElemRef; project: Project; onPreview?: (p: Preview | null) => void }) {
+  const variants = useVariants(project, r);
+  const font = getLoadedFont(project.blocks.find((b) => b.id === r.block)?.font ?? '');
+  if (variants.length < 2) return <p className="muted small">{font?.info.name ?? 'This font'} has no other forms for this letter here.</p>;
   return (
     <div className="alternates">
-      <span className="field-label">Alternate forms</span>
-      <div className="alt-grid">
-        {alts.map((a) => {
-          const pad = 60;
-          const vb = `${a.bbox.x0 - pad} ${-a.bbox.y1 - pad} ${a.bbox.x1 - a.bbox.x0 + pad * 2} ${a.bbox.y1 - a.bbox.y0 + pad * 2}`;
-          return (
-            <button
-              key={a.alt || 'default'}
-              type="button"
-              className={`alt${current === a.alt ? ' on' : ''}`}
-              title={a.label}
-              onClick={() => store.update((p) => setEdit(p, r, { ...getEdit(p, r), alt: a.alt || undefined }))}
-            >
-              <svg viewBox={vb}>
-                <path d={a.d} transform="scale(1 -1)" />
-              </svg>
-              <small>{a.label}</small>
-            </button>
-          );
-        })}
-      </div>
+      <span className="field-label">
+        Letter forms <em className="hint-key">[ ]</em>
+      </span>
+      <VariantPicker store={store} project={project} r={r} variants={variants} onPreview={onPreview ?? (() => {})} layout="grid" />
     </div>
   );
 }

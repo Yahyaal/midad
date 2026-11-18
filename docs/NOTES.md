@@ -23,9 +23,19 @@ drag across = bend).
 **Elongation** (madd) cuts a letter's outline at an adjustable x and slides the left part outwards. This
 lengthens bowls and tails without thinning them, which horizontal scaling would do.
 
+## Letter forms (v0.2)
+Fonts like Amiri, Aref Ruqaa and Noto Nastaliq draw most letters several ways and pick one by context.
+Midad shapes the selected letter beside every dual/right-joining neighbour in the same joining position,
+collects the distinct glyphs (plus stylistic-set results), drops near-duplicates with a coarse bitmap
+comparison on a shared frame, and offers them as swaps. A swap is stored as `swap: "font:glyphId"`.
+Placement: compute the old form's entry/exit points against its real neighbours and the new form's
+entry/exit points in the context it was designed for, then translate by the average mismatch.
+Scheherazade New has no contextual alternates, so it offers only elongations.
+
 ## Known limits
 * Pulling letters along steep joins can leave small shards where the pen stroke meets the outline.
 * Elongation is a straight cut, so it suits horizontal strokes (ى ن ب س ص ك), not vertical ones.
-* Alternates depend on the font: Aref Ruqaa, Reem Kufi and Scheherazade have several; Amiri few.
+* Medial forms can only line up one side exactly; the other side is bridged by a join stroke.
+* Nastaʿlīq dots are separate GPOS-placed marks and keep their original position after a swap.
 * Outline point editing is per-glyph and low level (no smoothing of neighbouring handles yet).
 * Kashida shifts assume right-to-left lines.

@@ -16,6 +16,7 @@ import {
 import { namesProject, SAMPLES } from './core/samples';
 import { createStore, getEdit, MODES, setEdit, type Store, useStore } from './core/store';
 import { Canvas } from './ui/Canvas';
+import type { Preview } from './ui/VariantPicker';
 import { Inspector } from './ui/Inspector';
 import { projectToSvg, svgToPngBlob } from './ui/exporters';
 import { moveEdit, elemInfo } from './ui/selection';
@@ -30,7 +31,10 @@ function initialProject(): Project {
 export default function App() {
   const store = useMemo(() => createStore(initialProject()), []);
   const project = useStore(store, (s) => s.project);
-  const { layouts, loading, error } = useLayouts(project);
+  // hovering a letter form previews it without touching the document or history
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const shown = useMemo(() => (preview ? setEdit(project, preview.ref, preview.edit) : project), [project, preview]);
+  const { layouts, loading, error } = useLayouts(shown);
   const [toast, setToast] = useState<string | null>(null);
   const [panel, setPanel] = useState<'none' | 'projects' | 'export' | 'help'>('none');
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -49,14 +53,14 @@ export default function App() {
         <div className="stage">
           {loading && <div className="loading">Loading letterforms…</div>}
           {error && <div className="error">Font failed to load: {error}</div>}
-          <Canvas store={store} layouts={layouts} />
+          <Canvas store={store} layouts={layouts} shownProject={shown} onPreview={setPreview} />
           <ZoomControls />
         </div>
         <aside className={`side${sheetOpen ? ' open' : ''}`}>
           <button type="button" className="sheet-toggle" onClick={() => setSheetOpen((o) => !o)} aria-expanded={sheetOpen}>
             {sheetOpen ? 'Hide panel ▾' : 'Edit panel ▴'}
           </button>
-          <Inspector store={store} layouts={layouts} />
+          <Inspector store={store} layouts={layouts} onPreview={setPreview} />
         </aside>
       </main>
       {panel === 'projects' && <ProjectsDialog store={store} onClose={() => setPanel('none')} notify={notify} />}
@@ -400,9 +404,11 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
           <li><b>Connected</b>: a run of joined letters (يحيى is one; سامي is سا + مي). Joins stay intact.</li>
           <li><b>Letter</b>: single letters. When you pull a letter away from its neighbours, a broad-pen <i>join stroke</i> is drawn to keep the word connected. Round handles on the joins add kashida (drag sideways) or bend the stroke (drag across). The ⟷ handle elongates the letter itself.</li>
           <li><b>Dots &amp; marks</b>: dots (nuqaṭ) and tashkīl move independently of their letter.</li>
+          <li><b>Letter forms</b>: when you tap a letter, a strip shows the other shapes the font designer drew for it (and elongated versions of final letters). Hover to preview, click to swap, or press <kbd>[</kbd> <kbd>]</kbd> to cycle.</li>
         </ul>
         <h4>Keys</h4>
         <ul className="keys">
+          <li><kbd>[</kbd> <kbd>]</kbd> previous / next form of the selected letter</li>
           <li><kbd>1</kbd>–<kbd>5</kbd> selection level · <kbd>Shift</kbd>+click add to selection</li>
           <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> redo</li>
           <li>Arrows nudge (<kbd>Shift</kbd> ×10) · <kbd>Delete</kbd> reset selection · <kbd>Esc</kbd> deselect</li>

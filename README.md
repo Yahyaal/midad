@@ -33,6 +33,10 @@ Other scripts:
   horizontal kashida, thin on steep strokes). Each join can be lengthened (kashida) and bent.
 * **Elongation**: a letter's outline is cut at an adjustable point and the left part is slid outwards, so long
   strokes (ى، ن، ب، س…) grow without the stroke thinning that plain horizontal scaling causes.
+* **Letter forms**: tapping a letter offers the other shapes the font draws for it in the same joining
+  position (harvested by shaping it next to many neighbours, plus stylistic sets), deduplicated by shape,
+  plus elongated forms for final letters. A swapped form is placed so its entry/exit line up with where the
+  original joined its neighbours; any remaining gap gets a pen-drawn join.
 * **Dots**: separate small contours in each glyph are detected and become independently movable pieces.
 * **Ink**: SVG filters for wet ink (ragged edge, pooling, darker rims), sumi bleed and gold leaf; overlap darkening
   comes from translucent layered strokes. The same SVG is used for export, so PNG/SVG match the preview.

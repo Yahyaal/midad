@@ -23,6 +23,8 @@ export interface Edit {
   points?: Record<string, [number, number]>;
   /** glyph: alternate form chosen (feature tag, e.g. "ss01" or "salt=2") */
   alt?: string;
+  /** glyph: swapped letterform, "fontId:glyphId" (ignored if the block's font changes) */
+  swap?: string;
 }
 
 export interface Block {
@@ -190,6 +192,7 @@ export function isIdentityEdit(e: Edit | undefined): boolean {
     !e.bend &&
     (e.weight ?? 1) === 1 &&
     !e.alt &&
+    !e.swap &&
     !(e.points && Object.keys(e.points).length)
   );
 }
@@ -211,6 +214,7 @@ export function cleanEdit(e: Edit): Edit | undefined {
   if (e.weight !== undefined && e.weight !== 1) out.weight = e.weight;
   if (e.points && Object.keys(e.points).length) out.points = e.points;
   if (e.alt) out.alt = e.alt;
+  if (e.swap) out.swap = e.swap;
   return Object.keys(out).length ? out : undefined;
 }
 

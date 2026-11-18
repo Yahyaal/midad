@@ -109,3 +109,46 @@ test('project file round-trips through save and open', async ({ page }) => {
   await expect(page.locator('.text-input')).toHaveValue('يحيى، سامي، رامي');
   await expect(page.locator('[data-join]')).toHaveCount(2);
 });
+
+test('tapping a letter offers its other forms; hover previews, click swaps, undo restores', async ({ page }) => {
+  await page.getByRole('button', { name: /Letter/ }).click();
+  const p = await pointOn(page, 'c0.0');
+  await page.mouse.click(p.x, p.y);
+  const strip = page.locator('.variant-float .variant');
+  await expect(strip.first()).toBeVisible();
+  expect(await strip.count()).toBeGreaterThanOrEqual(4);
+  await expect(strip.first()).toHaveAttribute('aria-selected', 'true');
+
+  // hover = preview only: canvas changes, document and history do not
+  const before = await page.locator('[data-piece="c0.0"]').getAttribute('d');
+  await strip.nth(2).hover();
+  await expect.poll(() => page.locator('[data-piece="c0.0"]').getAttribute('d')).not.toBe(before);
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  await page.mouse.move(5, 5);
+  await expect.poll(() => page.locator('[data-piece="c0.0"]').getAttribute('d')).toBe(before);
+
+  // click = swap, recorded and saved
+  await strip.nth(2).click();
+  await expect(strip.nth(2)).toHaveAttribute('aria-selected', 'true');
+  const proj = await savedProject(page);
+  expect(proj.blocks[0].edits['c0.0'].swap).toMatch(/^amiri:\d+$/);
+  expect(await page.locator('[data-join]').count()).toBeLessThanOrEqual(3);
+
+  // ] cycles to the next form, undo walks back
+  await page.keyboard.press(']');
+  await expect(strip.nth(3)).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Control+z');
+  await expect(strip.nth(2)).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Control+z');
+  await expect(strip.first()).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[data-piece="c0.0"]')).toHaveAttribute('d', before!);
+});
+
+test('final letters also offer elongated forms', async ({ page }) => {
+  await page.getByRole('button', { name: /Letter/ }).click();
+  const p = await pointOn(page, 'c3.0');
+  await page.mouse.click(p.x, p.y);
+  await page.locator('.variant-float .variant', { hasText: 'Longer' }).click();
+  const proj = await savedProject(page);
+  expect(proj.blocks[0].edits['c3.0'].stretch).toBeGreaterThan(500);
+});
