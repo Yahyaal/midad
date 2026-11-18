@@ -859,3 +859,8 @@ kbd {
     height: 40px;
   }
 }
+.canvas-hint.snap {
+  top: auto;
+  bottom: 60px;
+  background: var(--accent-2);
+}

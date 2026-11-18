@@ -11,6 +11,9 @@ export interface JoinContact {
   /** thinnest ink chord of A through cA (resp. B through cB), as two offsets */
   chordA: [Pt, Pt] | null;
   chordB: [Pt, Pt] | null;
+  /** unit stroke directions at cA / cB, both pointing from A towards B (natural coords) */
+  tA: Pt;
+  tB: Pt;
 }
 
 const contactCache = new Map<string, JoinContact>();
@@ -27,7 +30,7 @@ export function contact(font: LoadedFont, a: ShapedGlyph, b: ShapedGlyph, oa: Pt
     hit = computeContact(font, a.gid, b.gid, [ob[0] - oa[0], ob[1] - oa[1]]);
     contactCache.set(key, hit);
   }
-  return { cA: [hit.cA[0] + oa[0], hit.cA[1] + oa[1]], cB: [hit.cB[0] + oa[0], hit.cB[1] + oa[1]], chordA: hit.chordA, chordB: hit.chordB };
+  return { cA: [hit.cA[0] + oa[0], hit.cA[1] + oa[1]], cB: [hit.cB[0] + oa[0], hit.cB[1] + oa[1]], chordA: hit.chordA, chordB: hit.chordB, tA: hit.tA, tB: hit.tB };
 }
 
 export function computeContact(font: LoadedFont, gidA: number, gidB: number, rel: Pt): JoinContact {
@@ -95,6 +98,39 @@ export function computeContact(font: LoadedFont, gidA: number, gidB: number, rel
     return [p[0] + (ch[0][0] + ch[1][0]) / 2, p[1] + (ch[0][1] + ch[1][1]) / 2];
   };
 
+  // Stroke direction at each end: perpendicular to the thinnest chord, oriented from A's ink
+  // towards B's ink near the join, so a join stroke can leave A and enter B smoothly.
+  const inkNear = (polys: Pt[][], at: Pt, r: number): Pt | null => {
+    let sx = 0;
+    let sy = 0;
+    let n = 0;
+    for (const poly of polys)
+      for (const p of poly)
+        if (Math.hypot(p[0] - at[0], p[1] - at[1]) < r) {
+          sx += p[0];
+          sy += p[1];
+          n++;
+        }
+    return n ? [sx / n, sy / n] : null;
+  };
+  const withTangents = (cA: Pt, cB: Pt, chordA: [Pt, Pt] | null, chordB: [Pt, Pt] | null): JoinContact => {
+    const r = upem * 0.22;
+    const mA = inkNear(polysA, cA, r) ?? cA;
+    const mB = inkNear(polysB, cB, r) ?? cB;
+    let dir: Pt = [mB[0] - mA[0], mB[1] - mA[1]];
+    if (Math.hypot(dir[0], dir[1]) < 1e-6) dir = [-1, 0];
+    const along = (ch: [Pt, Pt] | null): Pt => {
+      const l0 = Math.hypot(dir[0], dir[1]);
+      if (!ch) return [dir[0] / l0, dir[1] / l0];
+      const v: Pt = [ch[0][0] - ch[1][0], ch[0][1] - ch[1][1]];
+      const l = Math.hypot(v[0], v[1]) || 1;
+      let t: Pt = [-v[1] / l, v[0] / l];
+      if (t[0] * dir[0] + t[1] * dir[1] < 0) t = [-t[0], -t[1]];
+      return t;
+    };
+    return { cA, cB, chordA, chordB, tA: along(chordA), tB: along(chordB) };
+  };
+
   const pts: Pt[] = [];
   for (const poly of polysA) for (const p of poly) if (near(p, unionB) && (insideFast(p, bB) || distToPolys(p, polysB) < tol)) pts.push(p);
   for (const poly of polysB) for (const p of poly) if (near(p, unionA) && (insideFast(p, bA) || distToPolys(p, polysA) < tol)) pts.push(p);
@@ -111,7 +147,7 @@ export function computeContact(font: LoadedFont, gidA: number, gidB: number, rel
           best = [pa, pb];
         }
       }
-    if (!best) return { cA: [0, font.kashidaY], cB: [0, font.kashidaY], chordA: null, chordB: null };
+    if (!best) return { cA: [0, font.kashidaY], cB: [0, font.kashidaY], chordA: null, chordB: null, tA: [-1, 0], tB: [-1, 0] };
     // nudge each end into its stroke so the bridge starts inside the ink
     const inward = (polys: Pt[][], p: Pt, toward: Pt): Pt => {
       const v: Pt = [p[0] - toward[0], p[1] - toward[1]];
@@ -124,7 +160,7 @@ export function computeContact(font: LoadedFont, gidA: number, gidB: number, rel
     };
     const cA = inward(polysA, best[0], best[1]);
     const cB = inward(polysB, best[1], best[0]);
-    return { cA, cB, chordA: chord(polysA, cA), chordB: chord(polysB, cB) };
+    return withTangents(cA, cB, chord(polysA, cA), chord(polysB, cB));
   }
 
   let c: Pt = [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
@@ -156,7 +192,7 @@ export function computeContact(font: LoadedFont, gidA: number, gidB: number, rel
       mid = [c[0] + (dir[0] * (ts[0] - ts[1])) / 2, c[1] + (dir[1] * (ts[0] - ts[1])) / 2];
     }
   }
-  return { cA: mid, cB: mid, chordA: chord(polysA, mid), chordB: chord(polysB, mid) };
+  return withTangents(mid, mid, chord(polysA, mid), chord(polysB, mid));
 }
 
 

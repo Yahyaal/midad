@@ -47,6 +47,14 @@ if (scenario === 'forms' || scenario === 'forms-mobile') {
     if (process.env.HOVER) await b.hover(); else await b.click();
   }
 }
+if (scenario === 'drag') {
+  await zoom(Number(process.env.ZOOM ?? 2));
+  await p.getByRole('button', { name: /Letter/ }).click();
+  if (process.env.FOLLOW === '0') await p.getByLabel('Neighbours follow').uncheck();
+  const pt = await pointOn(process.env.KEY || 'c1.0');
+  await drag(pt, Number(process.env.DX ?? 0), Number(process.env.DY ?? -60));
+  await p.mouse.click(5, 300);
+}
 if (scenario === 'export') await p.getByRole('button', { name: /Export/ }).click();
 if (scenario === 'gold') {
   await p.getByRole('radio', { name: 'Gold' }).click();

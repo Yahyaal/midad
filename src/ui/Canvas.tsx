@@ -3,6 +3,7 @@ import { type BBox, type Pt, apply, applyVec, bboxCenter, invert } from '../core
 import type { LaidBlock } from '../core/layout';
 import { type Edit, type ElemRef, type Project, refId } from '../core/model';
 import { type Preview, useVariants, VariantPicker } from './VariantPicker';
+import { neighbourWeights, seamlessTargets } from './linked';
 import { getEdit, sameRef, setEdit, type Store, useStore } from '../core/store';
 import { Artwork } from './Artwork';
 import {
@@ -38,6 +39,10 @@ interface Gesture {
   normal?: Pt;
   /** curve point editing */
   pointKey?: string;
+  /** neighbours dragged along with a letter */
+  followers?: { ref: ElemRef; w: number; e0: Edit }[];
+  /** seamless positions to snap a single dragged letter to */
+  snaps?: { t: Pt; label: string }[];
   pinch?: { a: Pt; b: Pt; ids: [number, number]; onSelection: boolean };
 }
 
@@ -69,6 +74,7 @@ export function Canvas({
   const [hover, setHover] = useState<ElemRef | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [snapNote, setSnapNote] = useState<string | null>(null);
   const layoutsRef = useRef(layouts);
   layoutsRef.current = layouts;
 
@@ -130,6 +136,20 @@ export function Canvas({
       moved: false,
       ...extra,
     };
+    if (type === 'move' && st.mode === 'letter') {
+      const glyphRefs = refs.filter((r) => r.kind === 'glyph');
+      const lb = glyphRefs.length ? layoutsRef.current.get(glyphRefs[0].block) : undefined;
+      if (lb && glyphRefs.every((r) => r.block === lb.block.id)) {
+        if (st.follow && !e.altKey) {
+          const w = neighbourWeights(lb, new Set(glyphRefs.map((r) => r.key)));
+          gesture.current.followers = [...w].map(([key, wt]) => {
+            const ref: ElemRef = { block: lb.block.id, kind: 'glyph', key };
+            return { ref, w: wt, e0: getEdit(st.project, ref) };
+          });
+        }
+        if (glyphRefs.length === 1 && refs.length === 1) gesture.current.snaps = seamlessTargets(lb, glyphRefs[0].key);
+      }
+    }
     store.beginGesture();
   };
 
@@ -271,11 +291,55 @@ export function Canvas({
         break;
       }
       case 'move': {
-        const snap = e.shiftKey ? (Math.abs(dv[0]) > Math.abs(dv[1]) ? [dv[0], 0] : [0, dv[1]]) : dv;
-        applyEdits(g, (ref, e0) => {
+        let mv: Pt = e.shiftKey ? (Math.abs(dv[0]) > Math.abs(dv[1]) ? [dv[0], 0] : [0, dv[1]]) : dv;
+        let note: string | null = null;
+        // magnetic snapping to positions where the letter joins its neighbours seamlessly
+        if (g.snaps && !e.altKey) {
+          const ref = g.refs[0];
           const el = elemInfo(layoutsRef.current, ref);
-          return el ? moveEdit(el, e0, snap as Pt) : e0;
-        });
+          const e0 = g.edits0.get(refId(ref)) ?? {};
+          if (el) {
+            const inv = invert(el.parent);
+            const d = applyVec(inv, mv);
+            const t: Pt = [(e0.tx ?? 0) + d[0], (e0.ty ?? 0) + d[1]];
+            const z = viewRef.current.z;
+            const screen = (v: Pt) => Math.hypot(...applyVec(el.parent, v)) * z;
+            let best: { t: Pt; label: string } | null = null;
+            let bd = SNAP_PX;
+            for (const c of g.snaps) {
+              const dist = screen([c.t[0] - t[0], c.t[1] - t[1]]);
+              if (dist < bd) {
+                bd = dist;
+                best = c;
+              }
+            }
+            if (best) {
+              mv = applyVec(el.parent, [best.t[0] - (e0.tx ?? 0), best.t[1] - (e0.ty ?? 0)]);
+              note = best.label;
+            } else if (screen([0, t[1]]) < BASELINE_PX) {
+              // close to the baseline: slide along it (kashida-like) instead of drifting
+              mv = applyVec(el.parent, [d[0], -(e0.ty ?? 0)]);
+              note = 'On the baseline';
+            }
+          }
+        }
+        setSnapNote(note);
+        const followers = g.followers ?? [];
+        store.update(
+          (p) => {
+            let acc = g.refs.reduce((a, r) => {
+              const el = elemInfo(layoutsRef.current, r);
+              return el ? setEdit(a, r, moveEdit(el, g.edits0.get(refId(r)) ?? {}, mv)) : a;
+            }, p);
+            for (const f of followers) {
+              const el = elemInfo(layoutsRef.current, f.ref);
+              // neighbours mostly follow vertically; horizontal moves stay local (they read as spacing)
+              if (el) acc = setEdit(acc, f.ref, moveEdit(el, f.e0, [mv[0] * f.w * 0.25, mv[1] * f.w]));
+            }
+            return acc;
+          },
+          { record: false },
+        );
         break;
       }
       case 'rotate': {
@@ -353,6 +417,7 @@ export function Canvas({
       if (g.type === 'pinch' && pointers.current.size > 0) return;
       gesture.current = null;
       setDragging(false);
+      setSnapNote(null);
       store.endGesture();
     }
   };
@@ -438,6 +503,7 @@ export function Canvas({
         </g>
       </svg>
       {hint && <div className="canvas-hint">{hint}</div>}
+      {snapNote && dragging && <div className="canvas-hint snap">{snapNote}</div>}
       {letterSel && bb && variants.length > 1 && !dragging && (
         <div
           className="variant-float"
@@ -477,6 +543,9 @@ function floatStyle(b: BBox, v: View, wrap: HTMLDivElement | null): React.CSSPro
   if (cx < 220) return { ...base, left: 8, transform: `translateY(${ty})` };
   return { ...base, left: cx, transform: `translate(-50%, ${ty})` };
 }
+
+const SNAP_PX = 12;
+const BASELINE_PX = 7;
 
 function clampZoom(z: number) {
   return Math.min(8, Math.max(0.1, z));

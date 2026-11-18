@@ -106,6 +106,7 @@ function TopBar({ store, onPanel }: { store: Store; onPanel: (p: 'projects' | 'e
 function ModeBar({ store }: { store: Store }) {
   const mode = useStore(store, (s) => s.mode);
   const showGuides = useStore(store, (s) => s.showGuides);
+  const follow = useStore(store, (s) => s.follow);
   return (
     <nav className="modebar" aria-label="Selection level">
       <span className="modebar-label">Select</span>
@@ -116,6 +117,11 @@ function ModeBar({ store }: { store: Store }) {
         </button>
       ))}
       <span className="spacer" />
+      {mode === 'letter' && (
+        <label className="check compact" title="Dragging a letter pulls its joined neighbours along so the word bends smoothly (hold Alt to move it alone)">
+          <input type="checkbox" checked={follow} onChange={(e) => store.set({ follow: e.target.checked })} /> Neighbours follow
+        </label>
+      )}
       <label className="check compact" title="Show baselines">
         <input type="checkbox" checked={showGuides} onChange={(e) => store.set({ showGuides: e.target.checked })} /> Guides
       </label>
@@ -403,6 +409,7 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
           <li><b>Block / Word</b>: move whole lines or words.</li>
           <li><b>Connected</b>: a run of joined letters (يحيى is one; سامي is سا + مي). Joins stay intact.</li>
           <li><b>Letter</b>: single letters. When you pull a letter away from its neighbours, a broad-pen <i>join stroke</i> is drawn to keep the word connected. Round handles on the joins add kashida (drag sideways) or bend the stroke (drag across). The ⟷ handle elongates the letter itself.</li>
+          <li><b>Moving letters smoothly</b>: with <i>Neighbours follow</i> on, joined neighbours come along part of the way (mostly up/down), so the word bends instead of breaking. While dragging, a letter snaps back to its original place, onto the baseline, or into line with a moved neighbour. Hold <kbd>Alt</kbd> to move it alone and without snapping.</li>
           <li><b>Dots &amp; marks</b>: dots (nuqaṭ) and tashkīl move independently of their letter.</li>
           <li><b>Letter forms</b>: when you tap a letter, a strip shows the other shapes the font designer drew for it (and elongated versions of final letters). Hover to preview, click to swap, or press <kbd>[</kbd> <kbd>]</kbd> to cycle.</li>
         </ul>

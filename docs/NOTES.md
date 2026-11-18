@@ -32,6 +32,14 @@ Placement: compute the old form's entry/exit points against its real neighbours 
 entry/exit points in the context it was designed for, then translate by the average mismatch.
 Scheherazade New has no contextual alternates, so it offers only elongations.
 
+## Smoother letter edits (v0.3)
+* Join strokes now leave A and enter B along each letter's own stroke direction (perpendicular to the
+  thinnest ink chord at the join), so lifted/lowered letters connect with curves instead of straight rods.
+* *Neighbours follow*: dragging a letter moves joined neighbours by 50% (next) and 20% (one further),
+  fully for vertical motion and a quarter for horizontal (horizontal moves read as spacing).
+* Snapping while dragging a single letter: back to its original place, to the same offset as a moved
+  neighbour (that join closes), or onto the baseline. Alt disables follow and snapping.
+
 ## Known limits
 * Pulling letters along steep joins can leave small shards where the pen stroke meets the outline.
 * Elongation is a straight cut, so it suits horizontal strokes (ى ن ب س ص ك), not vertical ones.

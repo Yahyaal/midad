@@ -14,6 +14,7 @@ test('renders the starting composition as shaped glyph outlines', async ({ page 
 
 test('moving a letter inside يحيى keeps it joined, and undo/redo work', async ({ page }) => {
   await page.getByRole('button', { name: /Letter/ }).click();
+  await page.getByLabel('Neighbours follow').uncheck();
   const p = await pointOn(page, 'c1.0');
   await drag(page, p, 10, -60);
   await expect(page.locator('.sel-label')).toHaveText('ح');
@@ -61,6 +62,7 @@ test('join handle adds kashida', async ({ page }) => {
 
 test('edits survive a reload', async ({ page }) => {
   await page.getByRole('button', { name: /Letter/ }).click();
+  await page.getByLabel('Neighbours follow').uncheck();
   await drag(page, await pointOn(page, 'c3.0'), -50, 0);
   await savedProject(page);
   await page.reload();
@@ -96,6 +98,7 @@ test('SVG export matches the canvas artwork exactly', async ({ page }) => {
 
 test('project file round-trips through save and open', async ({ page }) => {
   await page.getByRole('button', { name: /Letter/ }).click();
+  await page.getByLabel('Neighbours follow').uncheck();
   await drag(page, await pointOn(page, 'c2.0'), 0, 30);
   await page.getByRole('button', { name: /Projects/ }).click();
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save to file…' }).click()]);
@@ -151,4 +154,31 @@ test('final letters also offer elongated forms', async ({ page }) => {
   await page.locator('.variant-float .variant', { hasText: 'Longer' }).click();
   const proj = await savedProject(page);
   expect(proj.blocks[0].edits['c3.0'].stretch).toBeGreaterThan(500);
+});
+
+test('dragging a letter pulls its neighbours partly along', async ({ page }) => {
+  await page.getByRole('button', { name: /Letter/ }).click();
+  await drag(page, await pointOn(page, 'c1.0'), 0, -60);
+  const e = (await savedProject(page)).blocks[0].edits;
+  expect(e['c1.0'].ty).toBeGreaterThan(0);
+  expect(e['c0.0'].ty).toBeCloseTo(e['c1.0'].ty * 0.5, 0);
+  expect(e['c2.0'].ty).toBeCloseTo(e['c1.0'].ty * 0.5, 0);
+  expect(e['c3.0'].ty).toBeCloseTo(e['c1.0'].ty * 0.2, 0);
+  expect(e['c6.0']).toBeUndefined(); // other words untouched
+});
+
+test('a letter dragged back near its place snaps home and the word is whole again', async ({ page }) => {
+  await page.getByRole('button', { name: /Letter/ }).click();
+  await page.getByLabel('Neighbours follow').uncheck();
+  const p = await pointOn(page, 'c1.0');
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(p.x, p.y - i * 12);
+  await expect(page.locator('[data-join]')).toHaveCount(2);
+  for (let i = 1; i <= 6; i++) await page.mouse.move(p.x + 2, p.y - 72 + i * 11.5); // ends ~3px off
+  await expect(page.locator('.canvas-hint.snap')).toContainText('Joined');
+  await page.mouse.up();
+  await expect(page.locator('[data-join]')).toHaveCount(0);
+  const e = (await savedProject(page)).blocks[0].edits;
+  expect(e['c1.0']).toBeUndefined();
 });

@@ -22,6 +22,8 @@ export interface State {
   rev: number;
   showGuides: boolean;
   curveEdit: boolean;
+  /** dragging a letter pulls its joined neighbours a little, so the word bends instead of breaking */
+  follow: boolean;
 }
 
 const HISTORY_LIMIT = 200;
@@ -29,7 +31,7 @@ const HISTORY_LIMIT = 200;
 type Listener = () => void;
 
 export function createStore(initial: Project) {
-  let state: State = { project: initial, selection: [], mode: 'letter', past: [], future: [], rev: 0, showGuides: true, curveEdit: false };
+  let state: State = { project: initial, selection: [], mode: 'letter', past: [], future: [], rev: 0, showGuides: true, curveEdit: false, follow: true };
   const listeners = new Set<Listener>();
   let gestureSnapshot: Project | null = null;
   let gestureRecorded = false;

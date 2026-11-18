@@ -13,6 +13,7 @@ test.beforeEach(async ({ page }) => {
 test('one-finger drag moves a letter; two-finger pinch scales it', async ({ page }) => {
   await freshApp(page);
   await page.getByRole('button', { name: /حرف/ }).click();
+  await page.getByLabel('Neighbours follow').uncheck();
   const p = await pointOn(page, 'c1.0');
   await touch(page, 'touchStart', [{ ...p, id: 1 }]);
   for (let i = 1; i <= 5; i++) await touch(page, 'touchMove', [{ x: p.x, y: p.y - i * 6, id: 1 }]);

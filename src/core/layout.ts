@@ -150,6 +150,27 @@ function applyPointEdits(o: GlyphOutline, points: Record<string, [number, number
 
 const smooth = (x: number) => x * x * (3 - 2 * x);
 
+/** Cubic control points of a join: follow the letters' stroke directions, plus the user's bend. */
+export function bridgeControls(pA: Pt, pB: Pt, bend: number, tA?: Pt, tB?: Pt) {
+  const dx = pB[0] - pA[0];
+  const dy = pB[1] - pA[1];
+  const len = Math.hypot(dx, dy);
+  const nx = len ? -dy / len : 0;
+  const ny = len ? dx / len : 0;
+  const k = bend * len * 0.75;
+  let c1: Pt = [pA[0] + dx / 3, pA[1] + dy / 3];
+  let c2: Pt = [pA[0] + (2 * dx) / 3, pA[1] + (2 * dy) / 3];
+  if (tA && tB && len > 0) {
+    // handle length: long enough to carry the letter's direction, short enough not to loop
+    const h = len * 0.42;
+    c1 = [pA[0] + tA[0] * h, pA[1] + tA[1] * h];
+    c2 = [pB[0] - tB[0] * h, pB[1] - tB[1] * h];
+  }
+  c1 = [c1[0] + nx * k, c1[1] + ny * k];
+  c2 = [c2[0] + nx * k, c2[1] + ny * k];
+  return { c1, c2, len };
+}
+
 export interface PenSpec {
   /** nib width (artboard units) */
   width: number;
@@ -175,16 +196,12 @@ export function bridgePath(
   /** ink cross-sections (two screen points) where the stroke leaves A and enters B */
   capA?: [Pt, Pt] | null,
   capB?: [Pt, Pt] | null,
+  /** unit stroke directions (screen space) leaving A and entering B; makes the join flow out of the letters */
+  tA?: Pt,
+  tB?: Pt,
 ): string {
-  const dx = pB[0] - pA[0];
-  const dy = pB[1] - pA[1];
-  const len = Math.hypot(dx, dy);
+  const { c1, c2, len } = bridgeControls(pA, pB, bend, tA, tB);
   if (len < 0.8) return '';
-  const nx = -dy / len;
-  const ny = dx / len;
-  const k = bend * len * 0.75;
-  const c1: Pt = [pA[0] + dx / 3 + nx * k, pA[1] + dy / 3 + ny * k];
-  const c2: Pt = [pA[0] + (2 * dx) / 3 + nx * k, pA[1] + (2 * dy) / 3 + ny * k];
   const steps = Math.min(48, Math.max(8, Math.round(len / 4)));
   const r = (pen.angle * Math.PI) / 180;
   const nib: Pt = [Math.cos(r), -Math.sin(r)]; // screen space, y down
@@ -526,14 +543,15 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
         je.weight ?? 1,
         capFor(cNat.chordA, cNat.cA, toA, fa, gA.world),
         capFor(cNat.chordB, cNat.cB, toB, fb, gB.world),
+        unit(applyVec(gA.world, cNat.tA)),
+        unit(applyVec(gB.world, cNat.tB)),
       );
       const len = Math.hypot(PB[0] - PA[0], PB[1] - PA[1]);
       const bend = je.bend ?? 0;
       const nrm: Pt = len > 0 ? [-(PB[1] - PA[1]) / len, (PB[0] - PA[0]) / len] : [0, 0];
-      const mid: Pt = [
-        (PA[0] + PB[0]) / 2 + nrm[0] * bend * len * 0.5625,
-        (PA[1] + PB[1]) / 2 + nrm[1] * bend * len * 0.5625,
-      ];
+      const ctl = bridgeControls(PA, PB, bend, unit(applyVec(gA.world, cNat.tA)), unit(applyVec(gB.world, cNat.tB)));
+      const mid: Pt = len > 0.8 ? cubicPoint(PA, ctl.c1, ctl.c2, PB, 0.5) : [(PA[0] + PB[0]) / 2, (PA[1] + PB[1]) / 2];
+      void nrm;
       const lj: LaidJoin = { key: jk, a: pa.key, b: pb.key, pA: PA, pB: PB, mid, d, edit: je, visible: !!d };
       joins.push(lj);
       const el = addElem('join', jk, B, apply(invertSafe(B), mid), 'Join');
@@ -543,6 +561,11 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
 
   const bbox = blockEl.bbox;
   return { block, font, seg, lines, glyphs, joins, elems, base: B, bbox, owners };
+}
+
+function unit(v: Pt): Pt {
+  const l = Math.hypot(v[0], v[1]) || 1;
+  return [v[0] / l, v[1] / l];
 }
 
 function invertSafe(m: Mat): Mat {
