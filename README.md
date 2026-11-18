@@ -4,6 +4,8 @@ Compose artistic Arabic calligraphy in the browser. Type Arabic, pick a script, 
 letter by letter: move, scale and rotate words, connected groups, single letters, dots and tashkīl, stretch
 letters and joins, and finish it in ink on paper. Everything is vector; exports match the canvas exactly.
 
+**Live app:** https://yahyaal.github.io/midad/
+
 ## Quick start
 
 ```bash
