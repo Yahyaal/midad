@@ -137,3 +137,25 @@ export function setText(p: Project, blockId: string, text: string): Project {
 }
 
 export const sameRef = (a: ElemRef, b: ElemRef) => refId(a) === refId(b);
+
+/**
+ * Close every gap in the connected group(s) of the given letters: drop moves,
+ * rotations and scales of the letters (and their dots/marks), keep chosen
+ * forms, elongations and kashidas.
+ */
+export function reconnect(p: Project, blockId: string, letterKeys: string[], ownerOf: (key: string) => string | undefined): Project {
+  const groups = new Set(letterKeys.map((k) => ownerOf(k)).filter(Boolean));
+  return mapBlock(p, blockId, (b) => {
+    const edits: Record<string, Edit> = {};
+    for (const [k, e] of Object.entries(b.edits)) {
+      const letter = k.match(/^c\d+\.\d+/)?.[0];
+      if (letter && groups.has(ownerOf(letter))) {
+        const keep = cleanEdit({ ...e, tx: 0, ty: 0, rot: 0, sx: 1, sy: 1 });
+        if (keep) edits[k] = keep;
+      } else edits[k] = e;
+    }
+    // a moved group itself snaps back too
+    for (const g of groups) if (g) delete edits[g];
+    return { ...b, edits };
+  });
+}

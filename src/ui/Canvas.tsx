@@ -75,6 +75,14 @@ export function Canvas({
   const [hint, setHint] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [snapNote, setSnapNote] = useState<string | null>(null);
+  // the forms strip must not move under the pointer while previews reflow the word
+  const stripHover = useRef(false);
+  const stripStyle = useRef<React.CSSProperties | null>(null);
+  const [, setStripTick] = useState(0);
+  const stripPos = (fresh: React.CSSProperties) => {
+    if (!stripHover.current || !stripStyle.current) stripStyle.current = fresh;
+    return stripStyle.current;
+  };
   const layoutsRef = useRef(layouts);
   layoutsRef.current = layouts;
 
@@ -507,8 +515,13 @@ export function Canvas({
       {letterSel && bb && variants.length > 1 && !dragging && (
         <div
           className="variant-float"
-          style={floatStyle(bb, view, wrapRef.current)}
+          style={stripPos(floatStyle(bb, view, wrapRef.current))}
           onPointerDown={(e) => e.stopPropagation()}
+          onPointerEnter={() => (stripHover.current = true)}
+          onPointerLeave={() => {
+            stripHover.current = false;
+            setStripTick((t) => t + 1);
+          }}
         >
           <VariantPicker store={store} project={realProject} r={letterSel} variants={variants} onPreview={onPreview ?? (() => {})} layout="strip" />
         </div>

@@ -5,11 +5,40 @@ import { getLoadedFont } from '../core/fonts';
 import { type BBox, EMPTY_BBOX, bboxValid, unionBBox } from '../core/geometry';
 import { type Edit, type ElemRef, type Project } from '../core/model';
 import { getEdit, setEdit, type Store } from '../core/store';
-import { type LetterVariant, letterVariants, naturalGid } from '../core/variants';
+import { fitNeighbours, type LetterVariant, letterVariants, naturalGid } from '../core/variants';
 
 export interface Preview {
   ref: ElemRef;
   edit: Edit;
+  /** neighbours re-formed to fit (applied together with the main edit) */
+  also?: { ref: ElemRef; edit: Edit }[];
+}
+
+/** Edits for the letter plus its neighbours, re-formed the way the font would pair them. */
+export function variantEdits(project: Project, r: ElemRef, v: LetterVariant): Preview {
+  const block = project.blocks.find((b) => b.id === r.block)!;
+  const edit = editForVariant(getEdit(project, r), v, block.font);
+  const font = getLoadedFont(block.font);
+  const cluster = Number(r.key.slice(1).split('.')[0]);
+  const also: { ref: ElemRef; edit: Edit }[] = [];
+  if (font) {
+    const gid = v.kind === 'form' ? v.gid : naturalGid(font, block, cluster);
+    if (gid !== undefined) {
+      for (const f of fitNeighbours(font, block, cluster, gid)) {
+        const ref: ElemRef = { block: r.block, kind: 'glyph', key: f.key };
+        const cur = getEdit(project, ref);
+        const swap = f.gid === null ? undefined : `${block.font}:${f.gid}`;
+        if ((cur.swap ?? undefined) !== swap) also.push({ ref, edit: { ...cur, swap } });
+      }
+    }
+  }
+  return { ref: r, edit, also };
+}
+
+export function applyPreview(p: Project, pv: Preview): Project {
+  let out = setEdit(p, pv.ref, pv.edit);
+  for (const a of pv.also ?? []) out = setEdit(out, a.ref, a.edit);
+  return out;
 }
 
 export function editForVariant(base: Edit, v: LetterVariant, fontId: string): Edit {
@@ -79,7 +108,7 @@ export function VariantPicker({
   }, [variants]);
   const choose = (v: LetterVariant) => {
     onPreview(null);
-    store.update((p) => setEdit(p, r, editForVariant(getEdit(p, r), v, block.font)));
+    store.update((p) => applyPreview(p, variantEdits(p, r, v)));
   };
 
   // [ and ] cycle through the forms (strip only, so the shortcut is registered once)
@@ -111,7 +140,7 @@ export function VariantPicker({
           aria-selected={v.id === active}
           className={`variant${v.id === active ? ' on' : ''}${v.kind === 'long' ? ' long' : ''}`}
           title={v.kind === 'form' ? 'Alternative form drawn by the font designer' : v.kind === 'long' ? 'Elongated (madd)' : 'The form the font chose'}
-          onPointerEnter={(ev) => ev.pointerType === 'mouse' && onPreview({ ref: r, edit: editForVariant(e, v, block.font) })}
+          onPointerEnter={(ev) => ev.pointerType === 'mouse' && onPreview(variantEdits(project, r, v))}
           onPointerDown={(ev) => ev.stopPropagation()}
           onClick={() => choose(v)}
         >

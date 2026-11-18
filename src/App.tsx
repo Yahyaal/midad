@@ -16,7 +16,7 @@ import {
 import { namesProject, SAMPLES } from './core/samples';
 import { createStore, getEdit, MODES, setEdit, type Store, useStore } from './core/store';
 import { Canvas } from './ui/Canvas';
-import type { Preview } from './ui/VariantPicker';
+import { applyPreview, type Preview } from './ui/VariantPicker';
 import { Inspector } from './ui/Inspector';
 import { projectToSvg, svgToPngBlob } from './ui/exporters';
 import { moveEdit, elemInfo } from './ui/selection';
@@ -33,7 +33,7 @@ export default function App() {
   const project = useStore(store, (s) => s.project);
   // hovering a letter form previews it without touching the document or history
   const [preview, setPreview] = useState<Preview | null>(null);
-  const shown = useMemo(() => (preview ? setEdit(project, preview.ref, preview.edit) : project), [project, preview]);
+  const shown = useMemo(() => (preview ? applyPreview(project, preview) : project), [project, preview]);
   const { layouts, loading, error } = useLayouts(shown);
   const [toast, setToast] = useState<string | null>(null);
   const [panel, setPanel] = useState<'none' | 'projects' | 'export' | 'help'>('none');
@@ -411,7 +411,8 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
           <li><b>Letter</b>: single letters. When you pull a letter away from its neighbours, a broad-pen <i>join stroke</i> is drawn to keep the word connected. Round handles on the joins add kashida (drag sideways) or bend the stroke (drag across). The ⟷ handle elongates the letter itself.</li>
           <li><b>Moving letters smoothly</b>: with <i>Neighbours follow</i> on, joined neighbours come along part of the way (mostly up/down), so the word bends instead of breaking. While dragging, a letter snaps back to its original place, onto the baseline, or into line with a moved neighbour. Hold <kbd>Alt</kbd> to move it alone and without snapping.</li>
           <li><b>Dots &amp; marks</b>: dots (nuqaṭ) and tashkīl move independently of their letter.</li>
-          <li><b>Letter forms</b>: when you tap a letter, a strip shows the other shapes the font designer drew for it (and elongated versions of final letters). Hover to preview, click to swap, or press <kbd>[</kbd> <kbd>]</kbd> to cycle.</li>
+          <li><b>Letter forms</b>: when you tap a letter, a strip shows the other shapes the font designer drew for it (and elongated versions of final letters). Hover to preview, click to swap, or press <kbd>[</kbd> <kbd>]</kbd> to cycle. The word re-flows around the new shape, and its neighbours change to the shapes the font pairs with it.</li>
+          <li><b>Reconnect word</b> (in the panel for a letter or group) puts a pulled-apart word back together while keeping the forms, elongations and kashidas you chose.</li>
         </ul>
         <h4>Keys</h4>
         <ul className="keys">

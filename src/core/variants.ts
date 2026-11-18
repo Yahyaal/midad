@@ -28,6 +28,8 @@ export interface LetterVariant {
 }
 
 const DUAL = [...'بتجحسصطعفقكلمنهي'];
+/** contexts that trigger special ligatures (the Allah ligature brings its own shadda) */
+const SPECIAL = /لل|له/;
 const RIGHT = [...'ادرو'];
 const TATWEEL = 'ـ';
 
@@ -60,6 +62,7 @@ export function harvestForms(font: LoadedFont, ch: string, pos: JoinPos): number
   for (const f of feats) {
     for (const [p, n] of contexts) {
       const text = p + ch + n;
+      if (SPECIAL.test(text)) continue;
       const features = f ? [parseFeature(f, p.length, p.length + 1)] : [];
       const glyphs = shapeText(font, text, features)[0].glyphs.filter((g) => !g.isMark);
       const mine = glyphs.filter((g) => g.cluster === p.length);
@@ -171,4 +174,156 @@ export function naturalGid(font: LoadedFont, block: Block, cluster: number): num
     if (g) return g.gid;
   }
   return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Neighbour fitting: when a letter takes a new shape, ask the font which shapes
+// it pairs with that shape on either side, and use them.
+
+const pairCache = new Map<string, Map<number, Map<number, number>>>();
+
+/**
+ * For the letter pair (first, second) in their joining positions, which glyph
+ * of `first` does the font use next to each glyph of `second`, and vice versa.
+ * Returns map: glyph of the *known* letter → (glyph of the other letter → count).
+ */
+function pairTable(
+  font: LoadedFont,
+  first: string,
+  firstPos: JoinPos,
+  second: string,
+  secondPos: JoinPos,
+  known: 'first' | 'second',
+  /** the real letters around the pair, when known (the neighbour's shape depends on its other side too) */
+  before?: string,
+  after?: string,
+) {
+  const key = `${font.info.id}|${before ?? '*'}${first}${firstPos}|${second}${secondPos}${after ?? '*'}|${known}`;
+  let table = pairCache.get(key);
+  if (table) return table;
+  table = new Map();
+  const pres = firstPos === 'medi' ? (before ? [before] : [...DUAL, TATWEEL]) : [''];
+  const posts = secondPos === 'medi' ? (after ? [after] : [...DUAL, ...RIGHT, TATWEEL]) : [''];
+  const feats = ['', ...stylisticFeatures(font)];
+  for (const f of feats)
+    for (const pre of pres)
+      for (const post of posts) {
+        const text = pre + first + second + post;
+        if (SPECIAL.test(text)) continue;
+        const i1 = pre.length;
+        const i2 = i1 + 1;
+        const at = known === 'first' ? i1 : i2;
+        const features = f ? [parseFeature(f, at, at + 1)] : [];
+        const glyphs = shapeText(font, text, features)[0].glyphs.filter((g) => !g.isMark);
+        if (new Set(glyphs.map((g) => g.cluster)).size !== text.length) continue;
+        const g1 = glyphs.find((g) => g.cluster === i1);
+        const g2 = glyphs.find((g) => g.cluster === i2);
+        if (!g1 || !g2) continue;
+        const [k, o] = known === 'first' ? [g1.gid, g2.gid] : [g2.gid, g1.gid];
+        let row = table.get(k);
+        if (!row) table.set(k, (row = new Map()));
+        row.set(o, (row.get(o) ?? 0) + 1);
+      }
+  pairCache.set(key, table);
+  return table;
+}
+
+function joinedNeighbour(text: string, cluster: number, dir: -1 | 1): number {
+  const seg = segment(text);
+  let j = cluster + dir;
+  while (j >= 0 && j < text.length && joinType(text.charCodeAt(j)) === 'T') j += dir;
+  if (j < 0 || j >= text.length) return -1;
+  const [a, b] = dir < 0 ? [j, cluster] : [cluster, j];
+  return seg.joinsNext[a] && seg.groupOf[a] === seg.groupOf[b] ? j : -1;
+}
+
+export interface NeighbourFit {
+  key: string;
+  /** the shape the font pairs with the new form, or null to return to the font's own choice */
+  gid: number | null;
+}
+
+/** Shapes for the joined neighbours that the font itself pairs with `newGid` at `cluster`. */
+export function fitNeighbours(font: LoadedFont, block: Block, cluster: number, newGid: number): NeighbourFit[] {
+  const text = block.text;
+  const out: NeighbourFit[] = [];
+  const pos = joinPosition(text, cluster);
+  for (const dir of [-1, 1] as const) {
+    const n = joinedNeighbour(text, cluster, dir);
+    if (n < 0) continue;
+    const nPos = joinPosition(text, n);
+    // the neighbour's own other neighbour, so the font answers for this exact spelling
+    const far = joinedNeighbour(text, n, dir);
+    const farCh = far >= 0 ? text[far] : undefined;
+    const table =
+      dir < 0
+        ? pairTable(font, text[n], nPos, text[cluster], pos, 'second', farCh, undefined)
+        : pairTable(font, text[cluster], pos, text[n], nPos, 'first', undefined, farCh);
+    const natural = naturalGid(font, { ...block, edits: {} }, n);
+    const row = table.get(newGid);
+    let best: number | undefined;
+    if (row && row.size) best = [...row.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    // The font never pairs these shapes: pick the neighbour form that chains on without
+    // colliding and without pushing the rest of the word off its line.
+    else best = geometricFit(font, text[cluster], pos, newGid, text[n], nPos, dir, natural);
+    if (best === undefined) continue;
+    out.push({ key: `c${n}.0`, gid: best === natural ? null : best });
+  }
+  return out;
+}
+
+function geometricFit(font: LoadedFont, ch: string, pos: JoinPos, gid: number, nCh: string, nPos: JoinPos, dir: -1 | 1, natural?: number): number | undefined {
+  const a = formAnchors(font, ch, pos, gid);
+  const join = dir < 0 ? a?.entry : a?.exit;
+  if (!join) return undefined;
+  const forms = harvestForms(font, nCh, nPos);
+  const G = font.outline(gid).polys;
+  const inside = (p: [number, number], polys: [number, number][][]) => {
+    let c = 0;
+    for (const poly of polys) if (pointInPolygon(p, poly)) c++;
+    return c % 2 === 1;
+  };
+  // reference: where the neighbour's far side should stay (its natural form, chained the same way)
+  let best: number | undefined;
+  let bestScore = Infinity;
+  const far = (na: Anchors | null) => (dir < 0 ? na?.entry : na?.exit);
+  const near = (na: Anchors | null) => (dir < 0 ? na?.exit : na?.entry);
+  const placeOf = (na: Anchors | null): [number, number] | null => {
+    const nj = near(na);
+    return nj ? [join[0] - nj[0], join[1] - nj[1]] : null;
+  };
+  let naturalOverlap = 0;
+  for (const f of forms) {
+    const na = formAnchors(font, nCh, nPos, f);
+    const at = placeOf(na);
+    if (!at) continue;
+    const N = font.outline(f).polys.map((poly) => poly.map(([x, y]) => [x + at[0], y + at[1]] as [number, number]));
+    let hits = 0;
+    let total = 0;
+    for (const poly of N)
+      for (let i = 0; i < poly.length; i += 2) {
+        total++;
+        if (inside(poly[i], G)) hits++;
+      }
+    for (const poly of G)
+      for (let i = 0; i < poly.length; i += 2) {
+        total++;
+        if (inside(poly[i], N)) hits++;
+      }
+    const overlap = total ? hits / total : 0;
+    // vertical drift of the neighbour's far join (moves the rest of the word up or down)
+    let drift = 0;
+    const fj = far(na);
+    if (fj) drift = Math.abs(at[1] + fj[1]) / font.upem;
+    else drift = Math.abs(at[1]) / font.upem;
+    if (f === natural) naturalOverlap = overlap;
+    const score = overlap * 3 + drift * 0.5 + (f === natural ? -0.02 : 0);
+    if (score < bestScore) {
+      bestScore = score;
+      best = f;
+    }
+  }
+  // only re-form the neighbour when its current shape clearly collides with the new one
+  if (naturalOverlap < 0.06) return natural;
+  return best;
 }

@@ -36,9 +36,9 @@ import {
   joinKey,
   wordKey,
 } from './model';
-import { contact, anchorsInContext, swapOffset } from './anchors';
-import { formAnchors, joinPosition } from './variants';
-import { applySwaps, type FeatureRange, parseFeature, shapeText, type ShapedGlyph, type ShapedLine } from './shaping';
+import { contact } from './anchors';
+import { chainSwaps } from './chain';
+import { type FeatureRange, parseFeature, shapeText, type ShapedGlyph, type ShapedLine } from './shaping';
 
 export interface LaidPiece {
   key: string; // glyph key or dot key
@@ -263,24 +263,7 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
     const [fid, gid] = e.swap.split(':');
     if (fid === font.info.id && Number.isFinite(Number(gid))) swaps.set(key, Number(gid));
   }
-  // Place each swapped form where the original joined its neighbours.
-  const offsets = new Map<string, Pt>();
-  for (const line of lines) {
-    const bases = line.glyphs.filter((g) => !g.isMark);
-    bases.forEach((g, i) => {
-      const key = glyphKey(g.cluster, g.k);
-      const gid = swaps.get(key);
-      if (gid === undefined || gid === g.gid) return;
-      const pos = joinPosition(text, g.cluster);
-      const prev = pos === 'fina' || pos === 'medi' ? bases[i - 1] : undefined;
-      const next = pos === 'init' || pos === 'medi' ? bases[i + 1] : undefined;
-      const fresh = formAnchors(font, text[g.cluster], pos, gid);
-      if (!fresh) return;
-      const off = swapOffset(anchorsInContext(font, g, prev, next), fresh);
-      if (off) offsets.set(key, off);
-    });
-  }
-  applySwaps(font, lines, swaps, offsets);
+  chainSwaps(font, text, lines, swaps);
   const upem = font.upem;
   const k = block.size / upem;
   const edits = block.edits;
@@ -533,7 +516,10 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
         };
         return [m(chord[0]), m(chord[1])];
       };
-      const d = bridgePath(
+      // the font's own letters can sit a hair apart: only draw a join when an edit opened the gap
+      const natGap = applyVec(B, [cNat.cB[0] - cNat.cA[0], cNat.cB[1] - cNat.cA[1]]);
+      const untouched = Math.hypot(PB[0] - PA[0] - natGap[0], PB[1] - PA[1] - natGap[1]) < 0.75;
+      const d = untouched ? '' : bridgePath(
         PA,
         PB,
         sA,

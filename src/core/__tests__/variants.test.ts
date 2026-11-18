@@ -56,3 +56,16 @@ describe('letter variants', () => {
     expect(lb.glyphs[0].gid).not.toBe(12);
   });
 });
+
+describe('neighbour fitting', () => {
+  it('re-forms the ح when the initial ي of يحيى takes a baseline shape', async () => {
+    const { fitNeighbours } = await import('../variants');
+    const font = nodeFont('amiri');
+    const block = newBlock({ text: 'يحيى' });
+    const cur = layoutBlock(block, font).glyphs[0].gid;
+    const forms = letterVariants(font, block, 0, cur).filter((v) => v.kind === 'form');
+    const fits = forms.map((v) => fitNeighbours(font, block, 0, v.gid));
+    // at least one alternative ي needs a different ح to go with it
+    expect(fits.some((f) => f.some((x) => x.key === 'c1.0' && x.gid !== null))).toBe(true);
+  });
+});

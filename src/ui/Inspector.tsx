@@ -4,7 +4,7 @@ import { FONTS, getLoadedFont } from '../core/fonts';
 import { type Pt, applyVec, det, invert } from '../core/geometry';
 import type { LaidBlock } from '../core/layout';
 import { type Block, type Edit, type ElemRef, type InkStyle, type Project, newBlock } from '../core/model';
-import { getEdit, mapBlock, setEdit, setText, type Store, useStore } from '../core/store';
+import { getEdit, mapBlock, reconnect, setEdit, setText, type Store, useStore } from '../core/store';
 import { NumberField, Section, Segmented, Slider } from './controls';
 import { elemInfo } from './selection';
 
@@ -123,6 +123,21 @@ function SelectionPanel({
         <div className="sel-label" dir="rtl">
           {label}
         </div>
+      )}
+      {single && (single.kind === 'glyph' || single.kind === 'group') && (
+        <button
+          type="button"
+          className="small reconnect"
+          title="Put the letters of this connected group back together; keeps chosen forms, elongation and kashida"
+          onClick={() => {
+            const lb = layouts.get(single.block);
+            if (!lb) return;
+            const keys = single.kind === 'group' ? lb.glyphs.filter((g) => g.groupKey === single.key).map((g) => g.key) : [single.key];
+            store.update((p) => reconnect(p, single.block, keys, (k) => lb.owners.get(k)?.group));
+          }}
+        >
+          ⟲ Reconnect word
+        </button>
       )}
       {single?.kind === 'group' && <p className="muted small">Moves the whole connected run together, so its joins stay intact. Switch to Letter to pull letters apart. The join then stretches to follow.</p>}
       {single?.kind === 'glyph' && !glyph?.isMark && <p className="muted small">Joins to neighbouring letters stretch to follow. Drag the round join handles to add kashida or bend the join.</p>}

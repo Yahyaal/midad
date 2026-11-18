@@ -864,3 +864,11 @@ kbd {
   bottom: 60px;
   background: var(--accent-2);
 }
+.reconnect {
+  width: 100%;
+  margin: 2px 0 8px;
+  background: #fff;
+  border-color: var(--accent-2);
+  color: var(--accent-2);
+  font-weight: 500;
+}

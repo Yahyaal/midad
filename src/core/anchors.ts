@@ -218,7 +218,7 @@ export function anchorsInContext(font: LoadedFont, self: ShapedGlyph, prev?: Sha
   return out;
 }
 
-function computeContactCached(font: LoadedFont, a: number, b: number, rel: Pt): JoinContact {
+export function computeContactCached(font: LoadedFont, a: number, b: number, rel: Pt): JoinContact {
   const key = `${font.info.id}:${a}:${b}:${Math.round(rel[0])}:${Math.round(rel[1])}`;
   let hit = contactCache.get(key);
   if (!hit) {

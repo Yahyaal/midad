@@ -40,10 +40,20 @@ Scheherazade New has no contextual alternates, so it offers only elongations.
 * Snapping while dragging a single letter: back to its original place, to the same offset as a moved
   neighbour (that join closes), or onto the baseline. Alt disables follow and snapping.
 
+## Swaps that fit the word (v0.4)
+* **Chain reflow**: after swaps, each letter's entry point is placed on the previous letter's exit point
+  (the font's own hand-over points), so the word re-flows: no collisions, no synthetic joins; later words
+  keep their spacing.
+* **Neighbour fitting**: when a letter takes a new shape, the font is asked which shapes it pairs with it
+  on each side (shaping the real neighbour letters around it); those are applied in the same undo step.
+  If the font never pairs them, a neighbour is re-formed only when its shape clearly collides.
+* Join strokes are drawn only where an edit opened a gap (the font's own hairline gaps stay as designed).
+* **Reconnect word** drops moves/rotations/scales inside a connected group and keeps forms, madd, kashida.
+
 ## Known limits
 * Pulling letters along steep joins can leave small shards where the pen stroke meets the outline.
 * Elongation is a straight cut, so it suits horizontal strokes (ى ن ب س ص ك), not vertical ones.
-* Medial forms can only line up one side exactly; the other side is bridged by a join stroke.
+* A few context-specific forms (e.g. ح drawn for after ط) still leave the stacked ي perched above; pick a flatter ي.
 * Nastaʿlīq dots are separate GPOS-placed marks and keep their original position after a swap.
 * Outline point editing is per-glyph and low level (no smoothing of neighbouring handles yet).
 * Kashida shifts assume right-to-left lines.

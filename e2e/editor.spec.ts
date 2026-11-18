@@ -182,3 +182,19 @@ test('a letter dragged back near its place snaps home and the word is whole agai
   const e = (await savedProject(page)).blocks[0].edits;
   expect(e['c1.0']).toBeUndefined();
 });
+
+test('Reconnect word closes gaps but keeps the chosen letter form', async ({ page }) => {
+  await page.getByRole('button', { name: /Letter/ }).click();
+  const p = await pointOn(page, 'c0.0');
+  await page.mouse.click(p.x, p.y);
+  await page.locator('.variant-float .variant').nth(1).click();
+  const swapped = (await savedProject(page)).blocks[0].edits['c0.0'].swap;
+  expect(swapped).toBeTruthy();
+  await drag(page, await pointOn(page, 'c0.0'), 60, -70);
+  await expect(page.locator('[data-join]')).not.toHaveCount(0);
+  await page.getByRole('button', { name: /Reconnect word/ }).click();
+  await expect(page.locator('[data-join]')).toHaveCount(0);
+  const e = (await savedProject(page)).blocks[0].edits;
+  expect(e['c0.0']).toEqual({ swap: swapped });
+  expect(Object.keys(e).every((k) => !e[k].tx && !e[k].ty)).toBe(true);
+});
