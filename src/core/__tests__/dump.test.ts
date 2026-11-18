@@ -22,10 +22,17 @@ it.skipIf(!dir)('dump debug renders', () => {
     }),
     yahya: newBlock({ x: 800, y: 500, size: 380, text: 'يحيى', edits: { 'c1.0': { ty: -90, tx: 60 }, 'j2.0': { extend: 260, bend: 0.2 }, 'c0.0': { ty: 120, rot: 12 } } }),
     yahya2: newBlock({ x: 800, y: 500, size: 380, text: 'يحيى', edits: { 'c3.0': { stretch: 320, cut: 0.45 }, 'c2.0.d1': { tx: -80 }, 'j0.0': { extend: 150 } } }),
+    ...Object.fromEntries(
+      ['nastaliq', 'aref-ruqaa', 'reem-kufi', 'scheherazade'].map((f) => [
+        `font-${f}`,
+        newBlock({ x: 1500, y: 520, size: 330, align: 'right', font: f, text: 'يحيى سامي', edits: { 'c1.0': { ty: 150 }, 'j2.0': { extend: 250, bend: 0.15 }, 'j5.0': { extend: 300 } } }),
+      ]),
+    ),
     tashkil: newBlock({ x: 800, y: 450, size: 120, text: 'الخَطُّ هَنْدَسَةٌ رُوحَانِيَّة' }),
   };
   for (const [name, block] of Object.entries(cases)) {
     const lb = layoutBlock(block, nodeFont(block.font));
+    if (process.env.ONLY && !name.includes(process.env.ONLY)) continue;
     const parts: string[] = [];
     for (const g of lb.glyphs) for (const p of g.pieces) parts.push(`<path transform="${matToSvg(p.world)}" d="${p.d}" fill="${process.env.DEBUG_COLORS && p.kind === 'dot' ? '#a33' : process.env.DEBUG_COLORS && p.kind === 'mark' ? '#36a' : '#3b2514'}" fill-opacity="0.85"/>`);
     for (const j of lb.joins) if (j.d) parts.push(`<path d="${j.d}" fill="${process.env.DEBUG_COLORS ? '#2a7' : '#3b2514'}" fill-opacity="0.85"/>`);

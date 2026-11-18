@@ -110,7 +110,7 @@ export function analyseOutline(gid: number, cmds: Cmd[], upem: number): GlyphOut
   };
   // The main body is the outer contour with the largest extent.
   const mainIdx = outer.reduce((best, i) => (diag(i) > diag(best) ? i : best), outer[0]);
-  const dotSize = upem * 0.26;
+  const dotSize = upem * 0.38;
 
   const body: number[] = [];
   const pieces: GlyphPiece[] = [];

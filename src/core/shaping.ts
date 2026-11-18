@@ -61,7 +61,9 @@ export function shapeText(font: LoadedFont, text: string, features: FeatureRange
     for (const g of infos) {
       const cp = text.charCodeAt(g.cluster);
       const cls = font.face.getGlyphClass(g.codepoint);
-      const isMark = (cls === 3 || ((g.xAdvance ?? 0) === 0 && joinType(cp) === 'T')) && joinType(cp) === 'T';
+      // GDEF mark class, or a zero-width glyph from a combining character. Some fonts
+      // (e.g. Noto Nastaliq) emit their dots as separate mark glyphs on the base's cluster.
+      const isMark = cls === 3 || ((g.xAdvance ?? 0) === 0 && joinType(cp) === 'T');
       visual.push({
         gid: g.codepoint,
         cluster: g.cluster,

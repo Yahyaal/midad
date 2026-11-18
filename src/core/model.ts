@@ -158,7 +158,7 @@ export function newBlock(partial: Partial<Block> = {}): Block {
   };
 }
 
-export const DEFAULT_INK: Ink = { color: '#4a2c17', style: 'wet', layering: 0.55, texture: 0.6 };
+export const DEFAULT_INK: Ink = { color: '#4a2a14', style: 'wet', layering: 0.45, texture: 0.55 };
 export const DEFAULT_PAPER: Paper = { color: '#f4efe4', texture: 0.5, ruled: false };
 
 export function newProject(name = 'Untitled', blocks?: Block[]): Project {

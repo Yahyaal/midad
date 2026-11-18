@@ -40,18 +40,22 @@ export function InkDefs({ ink, paper, width, height, id }: { ink: Ink; paper: Pa
         <stop offset="0.8" stopColor="#a8741a" />
         <stop offset="1" stopColor="#e8c75e" />
       </linearGradient>
-      {/* Wet ink: ragged edges, uneven density, darker rims where ink pools. */}
+      {/* Wet ink: soft wobble on the edges, uneven density, darker rims where ink pools as it dries. */}
       <filter id={id('wet')} x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
-        <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="2" seed="3" result="fine" />
-        <feDisplacementMap in="SourceGraphic" in2="fine" scale={0.4 + 2.2 * t} xChannelSelector="R" yChannelSelector="G" result="rough" />
-        <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="3" seed="9" result="pool" />
-        <feColorMatrix in="pool" type="matrix" values={`0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 ${-1.3 * t} ${1 + 0.42 * t}`} result="poolA" />
+        <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="3" result="warp" />
+        <feDisplacementMap in="SourceGraphic" in2="warp" scale={0.4 + 2.6 * t} xChannelSelector="R" yChannelSelector="G" result="rough" />
+        <feTurbulence type="fractalNoise" baseFrequency="0.011 0.02" numOctaves="3" seed="9" result="pool" />
+        <feColorMatrix in="pool" type="matrix" values={`0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 ${-0.85 * t} ${1 + 0.26 * t}`} result="poolA" />
         <feComposite in="rough" in2="poolA" operator="in" result="body" />
-        <feMorphology in="rough" operator="erode" radius={0.6 + 1.4 * t} result="core" />
-        <feComposite in="rough" in2="core" operator="out" result="rim" />
-        <feColorMatrix in="rim" type="matrix" values={`0.55 0 0 0 0  0 0.5 0 0 0  0 0 0.45 0 0  0 0 0 ${0.55 * t} 0`} result="rimDark" />
+        <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="1" seed="21" result="grain" />
+        <feColorMatrix in="grain" type="matrix" values={`0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 ${-0.55 * t} ${0.28 * t}`} result="grainA" />
+        <feComposite in="body" in2="grainA" operator="out" result="grained" />
+        <feMorphology in="rough" operator="erode" radius={0.8 + 1.6 * t} result="core" />
+        <feGaussianBlur in="core" stdDeviation="0.8" result="coreSoft" />
+        <feComposite in="rough" in2="coreSoft" operator="out" result="rim" />
+        <feColorMatrix in="rim" type="matrix" values={`0.45 0 0 0 0  0 0.42 0 0 0  0 0 0.4 0 0  0 0 0 ${0.7 * t} 0`} result="rimDark" />
         <feMerge>
-          <feMergeNode in="body" />
+          <feMergeNode in="grained" />
           <feMergeNode in="rimDark" />
         </feMerge>
       </filter>
@@ -84,7 +88,7 @@ export function Artwork({ project, layouts, transparent, interactive, idPrefix =
   const { ink, paper } = project;
   const fill = inkFill(ink, id);
   const filter = ink.style === 'wet' ? `url(#${id('wet')})` : ink.style === 'sumi' ? `url(#${id('sumi')})` : ink.style === 'gold' ? `url(#${id('goldfx')})` : undefined;
-  const opacity = ink.style === 'gold' ? 1 : 1 - 0.38 * ink.layering;
+  const opacity = ink.style === 'gold' ? 1 : 1 - 0.3 * ink.layering;
   return (
     <g>
       <InkDefs ink={ink} paper={paper} width={project.width} height={project.height} id={id} />
