@@ -96,8 +96,10 @@ button.danger:hover:not(:disabled) {
 
 .app {
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
+  overflow: hidden;
 }
 
 /* Top bar ------------------------------------------------------------ */
@@ -130,7 +132,8 @@ button.danger:hover:not(:disabled) {
 }
 .project-name {
   flex: 1;
-  min-width: 60px;
+  width: 0;
+  min-width: 0;
   max-width: 380px;
   border: 1px solid transparent;
   background: transparent;
@@ -210,7 +213,7 @@ button.danger:hover:not(:disabled) {
 /* Workspace ------------------------------------------------------------ */
 .workspace {
   display: grid;
-  grid-template-columns: 1fr 330px;
+  grid-template-columns: minmax(0, 1fr) 330px;
   min-height: 0;
 }
 .stage {
@@ -709,7 +712,14 @@ kbd {
 /* Small screens: inspector becomes a bottom sheet ------------------------ */
 @media (max-width: 820px) {
   .workspace {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .top-actions {
+    gap: 4px;
+  }
+  .top-actions button {
+    min-width: 38px;
+    padding: 4px 8px;
   }
   .top-actions .lbl {
     display: none;

@@ -63,7 +63,7 @@ function describe(ref: ElemRef, layouts: Map<string, LaidBlock>, project: Projec
     if (!j || !lb) return '';
     const ga = lb.glyphs.find((g) => g.key === j.a);
     const gb = lb.glyphs.find((g) => g.key === j.b);
-    return `${ga?.char ?? ''} → ${gb?.char ?? ''}`;
+    return `${ga?.char ?? ""} ← ${gb?.char ?? ""}`;
   }
   return '';
 }
@@ -73,8 +73,13 @@ function SelectionPanel({ store, layouts, project, selection }: { store: Store; 
   const curveEdit = useStore(store, (s) => s.curveEdit);
   const update = (fn: (e: Edit, ref: ElemRef) => Edit, record = true) => store.update((p) => selection.reduce((acc, r) => setEdit(acc, r, fn(getEdit(acc, r), r)), p), { record });
   const reset = () => update(() => ({}));
-  const title = single ? KIND_LABEL[single.kind] : `${selection.length} items`;
-  const label = single ? describe(single, layouts, project) : '';
+  const lbSel = single ? layouts.get(single.block) : undefined;
+  const selGlyph = single?.kind === 'glyph' ? lbSel?.glyphs.find((g) => g.key === single.key) : undefined;
+  const isMark = !!selGlyph?.isMark;
+  const title = single ? (isMark ? 'Mark (ḥaraka)' : single.kind === 'dot' ? 'Dots (nuqaṭ)' : KIND_LABEL[single.kind]) : `${selection.length} items`;
+  let label = single ? describe(single, layouts, project) : '';
+  // a lone combining mark needs a dotted-circle carrier to display
+  if (isMark && /^[\u064b-\u065f\u0670\u06d6-\u06ed]$/.test(label)) label = `\u25cc${label}`;
 
   if (single?.kind === 'join') return <JoinPanel store={store} r={single} project={project} label={label} />;
 

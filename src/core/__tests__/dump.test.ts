@@ -28,6 +28,7 @@ it.skipIf(!dir)('dump debug renders', () => {
         newBlock({ x: 1500, y: 520, size: 330, align: 'right', font: f, text: 'يحيى سامي', edits: { 'c1.0': { ty: 150 }, 'j2.0': { extend: 250, bend: 0.15 }, 'j5.0': { extend: 300 } } }),
       ]),
     ),
+    sami: newBlock({ x: 800, y: 500, size: 380, text: 'سامي', edits: { 'j2.0': { extend: 350 } } }),
     tashkil: newBlock({ x: 800, y: 450, size: 120, text: 'الخَطُّ هَنْدَسَةٌ رُوحَانِيَّة' }),
   };
   for (const [name, block] of Object.entries(cases)) {

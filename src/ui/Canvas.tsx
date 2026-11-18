@@ -466,9 +466,10 @@ function TransformHandles({ b, hs, z }: { b: BBox; hs: number; z: number }) {
       {sq(x1, y0, 'scale', 'nesw-resize')}
       {sq(x0, y1, 'scale', 'nesw-resize')}
       {sq(x1, y1, 'scale', 'nwse-resize')}
-      {sq(x0, cy, 'scaleX', 'ew-resize')}
-      {sq(x1, cy, 'scaleX', 'ew-resize')}
-      {sq(cx, y1, 'scaleY', 'ns-resize')}
+      {/* edge handles only when the selection is big enough on screen to tell them apart */}
+      {(x1 - x0) * z > 70 && sq(x0, cy, 'scaleX', 'ew-resize')}
+      {(x1 - x0) * z > 70 && sq(x1, cy, 'scaleX', 'ew-resize')}
+      {(y1 - y0) * z > 70 && sq(cx, y1, 'scaleY', 'ns-resize')}
       {/* invisible fat hit areas for touch */}
       <circle data-handle="rotate" cx={cx} cy={rotY} r={hs * 1.6} fill="transparent" />
     </g>
