@@ -68,6 +68,13 @@ if (scenario === 'tidy' || scenario === 'tidy-before') {
   await p.waitForSelector('[data-piece]');
   if (scenario === 'tidy') await p.getByRole('button', { name: /Tidy/ }).click();
 }
+if (scenario === 'styles') {
+  await zoom(Number(process.env.ZOOM ?? 1));
+  await p.getByRole('button', { name: /Connected/ }).click();
+  const pt = await pointOn(process.env.KEY || 'c1.0'); await p.mouse.click(pt.x, pt.y);
+  await p.waitForSelector('.variant-float .variant.word');
+  if (process.env.PICK) await p.locator('.variant-float .variant.word').nth(Number(process.env.PICK)).click();
+}
 if (scenario === 'export') await p.getByRole('button', { name: /Export/ }).click();
 if (scenario === 'gold') {
   await p.getByRole('radio', { name: 'Gold' }).click();

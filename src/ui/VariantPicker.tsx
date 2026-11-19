@@ -12,6 +12,8 @@ export interface Preview {
   edit: Edit;
   /** neighbours re-formed to fit (applied together with the main edit) */
   also?: { ref: ElemRef; edit: Edit }[];
+  /** whole-project transform (word styles); used instead of ref/edit when present */
+  replace?: (p: Project) => Project;
 }
 
 /** Edits for the letter plus its neighbours, re-formed the way the font would pair them. */
@@ -36,6 +38,7 @@ export function variantEdits(project: Project, r: ElemRef, v: LetterVariant): Pr
 }
 
 export function applyPreview(p: Project, pv: Preview): Project {
+  if (pv.replace) return pv.replace(p);
   let out = setEdit(p, pv.ref, pv.edit);
   for (const a of pv.also ?? []) out = setEdit(out, a.ref, a.edit);
   return out;

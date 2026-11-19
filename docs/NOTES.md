@@ -63,7 +63,17 @@ One button (or `T`) runs five conservative passes over the selection's groups, o
 Everything is plain edits, written as a single undo step. The bar's strength slider re-runs from the
 original and replaces the result in place (still one undo step); *Hold to compare* shows the original.
 
+## Word styles (v0.6)
+For a connected group, Midad lays the group out on its own and beam-searches combinations of each
+letter's designer-drawn forms (chain reflow keeps every combination connected), scoring each for a look:
+*Compact* (narrow), *Stacked* (tall, letters climbing over each other) and *Flowing* (wide), with heavy
+penalties for ink collisions beyond the font's own and for synthetic joins. *Elongated* adds madd on a
+stretchy final letter, or kashida on the flattest join. A look is only offered when it clearly differs from
+the font's rendering. Styles only touch form fields (swap, stretch, kashida), never moves. Results are
+cached per word; letter forms are pre-collected in idle time so the strip opens quickly.
+
 ## Known limits
+* Word styles occasionally pick a compact combination where one letter just touches another (e.g. ل over خ).
 * Pulling letters along steep joins can leave small shards where the pen stroke meets the outline.
 * Elongation is a straight cut, so it suits horizontal strokes (ى ن ب س ص ك), not vertical ones.
 * A few context-specific forms (e.g. ح drawn for after ط) still leave the stacked ي perched above; pick a flatter ي.

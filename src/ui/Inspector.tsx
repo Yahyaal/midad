@@ -1,5 +1,6 @@
 import { stylisticFeatures } from '../core/alternates';
 import { type Preview, useVariants, VariantPicker } from './VariantPicker';
+import { groupTarget, useWordStyles, WordStylePicker } from './WordStylePicker';
 import { FONTS, getLoadedFont } from '../core/fonts';
 import { type Pt, applyVec, det, invert } from '../core/geometry';
 import type { LaidBlock } from '../core/layout';
@@ -139,6 +140,7 @@ function SelectionPanel({
           ⟲ Reconnect word
         </button>
       )}
+      {single && (single.kind === 'group' || single.kind === 'word') && <WordStylesSection store={store} project={project} r={single} onPreview={onPreview} />}
       {single?.kind === 'group' && <p className="muted small">Moves the whole connected run together, so its joins stay intact. Switch to Letter to pull letters apart. The join then stretches to follow.</p>}
       {single?.kind === 'glyph' && !glyph?.isMark && <p className="muted small">Joins to neighbouring letters stretch to follow. Drag the round join handles to add kashida or bend the join.</p>}
       {single && el && (
@@ -201,6 +203,18 @@ function JoinPanel({ store, r, project, label }: { store: Store; r: ElemRef; pro
       <Slider store={store} label="Bend" value={e.bend ?? 0} min={-1} max={1} step={0.01} onChange={(v) => set({ bend: v })} />
       <Slider store={store} label="Waist" hint="Thin the middle of the stroke" value={e.weight ?? 1} min={0.3} max={1.6} step={0.01} onChange={(v) => set({ weight: v })} />
     </Section>
+  );
+}
+
+function WordStylesSection({ store, project, r, onPreview }: { store: Store; project: Project; r: ElemRef; onPreview?: (p: Preview | null) => void }) {
+  const target = groupTarget(project, r);
+  const styles = useWordStyles(project, target);
+  if (!target) return <p className="muted small">This word has separate parts; switch to Connected to style each part.</p>;
+  return (
+    <div className="alternates">
+      <span className="field-label">Word styles</span>
+      <WordStylePicker store={store} project={project} target={target} styles={styles} onPreview={onPreview ?? (() => {})} layout="grid" />
+    </div>
   );
 }
 

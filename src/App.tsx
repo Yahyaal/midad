@@ -14,6 +14,8 @@ import {
   serializeProject,
 } from './core/persistence';
 import { namesProject, SAMPLES } from './core/samples';
+import { getLoadedFont } from './core/fonts';
+import { harvestForms, joinPosition } from './core/variants';
 import { createStore, getEdit, MODES, setEdit, type Store, useStore } from './core/store';
 import { Canvas } from './ui/Canvas';
 import { applyPreview, type Preview } from './ui/VariantPicker';
@@ -49,6 +51,7 @@ export default function App() {
     window.setTimeout(() => setToast((t) => (t === m ? null : t)), 2600);
   };
   useAutosave(store, notify);
+  useWarmForms(project, loading);
   const layoutsRef = useRef(layouts);
   layoutsRef.current = layouts;
   const doTidy = useCallback(() => {
@@ -178,6 +181,40 @@ function ZoomControls() {
       </button>
     </div>
   );
+}
+
+/** In idle time, collect each letter's alternative forms so form and word-style pickers open instantly. */
+function useWarmForms(project: Project, loading: boolean) {
+  const texts = project.blocks.map((b) => `${b.font}|${b.text}`).join('\n');
+  useEffect(() => {
+    if (loading) return;
+    const jobs: (() => void)[] = [];
+    for (const b of project.blocks) {
+      const font = getLoadedFont(b.font);
+      if (!font) continue;
+      const seen = new Set<string>();
+      for (let i = 0; i < b.text.length; i++) {
+        if (!/[\u0620-\u064a\u066e-\u06d3]/.test(b.text[i])) continue;
+        const pos = joinPosition(b.text, i);
+        const k = b.text[i] + pos;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        jobs.push(() => harvestForms(font, b.text[i], pos));
+      }
+    }
+    let cancelled = false;
+    const idle = (cb: () => void) => (typeof window.requestIdleCallback === 'function' ? window.requestIdleCallback(cb, { timeout: 2000 }) : setTimeout(cb, 50));
+    const step = () => {
+      if (cancelled || !jobs.length) return;
+      jobs.shift()!();
+      idle(step);
+    };
+    idle(step);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [texts, loading]);
 }
 
 function useAutosave(store: Store, notify: (m: string) => void) {
@@ -446,6 +483,7 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
           <li><b>Moving letters smoothly</b>: with <i>Neighbours follow</i> on, joined neighbours come along part of the way (mostly up/down), so the word bends instead of breaking. While dragging, a letter snaps back to its original place, onto the baseline, or into line with a moved neighbour. Hold <kbd>Alt</kbd> to move it alone and without snapping.</li>
           <li><b>Dots &amp; marks</b>: dots (nuqaṭ) and tashkīl move independently of their letter.</li>
           <li><b>Letter forms</b>: when you tap a letter, a strip shows the other shapes the font designer drew for it (and elongated versions of final letters). Hover to preview, click to swap, or press <kbd>[</kbd> <kbd>]</kbd> to cycle. The word re-flows around the new shape, and its neighbours change to the shapes the font pairs with it.</li>
+          <li><b>Word styles</b>: in <i>Connected</i> mode, tapping a joined word offers complete versions of it built from the font's own forms: <i>Compact</i>, <i>Stacked</i>, <i>Flowing</i>, <i>Elongated</i>. Hover to preview, click to apply, undo to go back. Your moves are kept; only letter shapes, madd and kashida change.</li>
           <li><b>✨ Tidy</b> (<kbd>T</kbd>) cleans up after free editing while keeping your intent: evens out jumps along each word, turns sideways pulls into kashida, swaps in better-fitting letter forms, restores spacing between words, and brings stray dots back. It works on the selection, or the whole composition when nothing is selected. Use the strength slider, hold <i>Compare</i> to see the before, and <i>Undo tidy</i> (or <kbd>Ctrl</kbd>+<kbd>Z</kbd>) to go back.</li>
           <li><b>Reconnect word</b> (in the panel for a letter or group) puts a pulled-apart word back together while keeping the forms, elongations and kashidas you chose.</li>
         </ul>

@@ -4,6 +4,7 @@ import type { LaidBlock } from '../core/layout';
 import { type Edit, type ElemRef, type Project, refId } from '../core/model';
 import { type Preview, useVariants, VariantPicker } from './VariantPicker';
 import { neighbourWeights, seamlessTargets } from './linked';
+import { groupTarget, useWordStyles, WordStylePicker } from './WordStylePicker';
 import { getEdit, sameRef, setEdit, type Store, useStore } from '../core/store';
 import { Artwork } from './Artwork';
 import {
@@ -474,6 +475,8 @@ export function Canvas({
   const single = selection.length === 1 ? selection[0] : null;
   const letterSel = single && single.kind === 'glyph' && mode === 'letter' && !curveEdit ? single : null;
   const variants = useVariants(realProject, letterSel);
+  const groupT = single && (mode === 'group' || mode === 'word') ? groupTarget(realProject, single) : null;
+  const wordStylesList = useWordStyles(realProject, groupT);
   const showTransformHandles = bb && selection.length > 0 && !selection.every((r) => r.kind === 'join');
 
   return (
@@ -512,6 +515,20 @@ export function Canvas({
       </svg>
       {hint && <div className="canvas-hint">{hint}</div>}
       {snapNote && dragging && <div className="canvas-hint snap">{snapNote}</div>}
+      {groupT && bb && !dragging && (wordStylesList === null || wordStylesList.length > 1) && (
+        <div
+          className="variant-float"
+          style={stripPos(floatStyle(bb, view, wrapRef.current))}
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerEnter={() => (stripHover.current = true)}
+          onPointerLeave={() => {
+            stripHover.current = false;
+            setStripTick((t) => t + 1);
+          }}
+        >
+          <WordStylePicker store={store} project={realProject} target={groupT} styles={wordStylesList} onPreview={onPreview ?? (() => {})} layout="strip" />
+        </div>
+      )}
       {letterSel && bb && variants.length > 1 && !dragging && (
         <div
           className="variant-float"

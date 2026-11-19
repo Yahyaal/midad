@@ -271,3 +271,30 @@ test('Tidy on a clean composition changes nothing', async ({ page }) => {
   await expect(page.locator('.toast')).toContainText('Already tidy');
   await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
 });
+
+test('word styles: preview on hover, apply on click, undo restores', async ({ page }) => {
+  await page.getByRole('button', { name: /Connected/ }).click();
+  const p = await pointOn(page, 'c1.0');
+  await page.mouse.click(p.x, p.y);
+  const strip = page.locator('.variant-float .variant.word');
+  await expect(strip.first()).toBeVisible({ timeout: 15000 });
+  expect(await strip.count()).toBeGreaterThanOrEqual(2);
+  await expect(strip.first()).toHaveAttribute('aria-selected', 'true');
+  const wordSig = () => page.$$eval('[data-piece^="c0."], [data-piece^="c1."], [data-piece^="c2."], [data-piece^="c3."]', (els) => els.map((e) => e.getAttribute('d') + e.getAttribute('transform')).join('|'));
+  const before = await wordSig();
+
+  await strip.nth(1).hover();
+  await expect.poll(wordSig).not.toBe(before);
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+
+  await strip.nth(1).click();
+  await expect(strip.nth(1)).toHaveAttribute('aria-selected', 'true');
+  const e = (await savedProject(page)).blocks[0].edits;
+  expect(Object.keys(e).length).toBeGreaterThan(0);
+  expect(Object.keys(e).every((k) => Number(k.slice(1).split('.')[0]) < 4)).toBe(true);
+
+  await page.mouse.move(5, 300);
+  await page.keyboard.press('Control+z');
+  expect((await savedProject(page)).blocks[0].edits).toEqual({});
+  await expect.poll(wordSig).toBe(before);
+});
