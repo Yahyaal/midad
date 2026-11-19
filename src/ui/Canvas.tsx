@@ -10,8 +10,12 @@ import { groupTarget, useWordStyles, WordStylePicker } from './WordStylePicker';
 import { getEdit, sameRef, setEdit, type Store, useStore } from '../core/store';
 import { Artwork } from './Artwork';
 import {
+  containsHit,
+  deepRef,
   elemInfo,
+  type HitTarget,
   hitFromElement,
+  levelsFor,
   moveEdit,
   resolveRef,
   rotateEdit,
@@ -77,6 +81,7 @@ export function Canvas({
   const [hover, setHover] = useState<ElemRef | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
   const [snapNote, setSnapNote] = useState<string | null>(null);
   // the forms strip must not move under the pointer while previews reflow the word
   const stripHover = useRef(false);
@@ -212,12 +217,31 @@ export function Canvas({
     let hit = hitFromElement(target);
     if (!hit && e.pointerType !== 'mouse') hit = nearbyHit(e.clientX, e.clientY);
     if (hit) {
-      const ref = resolveRef(hit, st.mode, layoutsRef.current);
+      const L = layoutsRef.current;
       const block = st.project.blocks.find((b) => b.id === hit.block);
+      const deep = e.metaKey || e.ctrlKey;
+      // double-tap on touch grows the selection (mouse uses the dblclick event)
+      if (e.pointerType !== 'mouse') {
+        const now = performance.now();
+        const last = lastTap.current;
+        lastTap.current = { t: now, x: e.clientX, y: e.clientY };
+        if (last && now - last.t < 320 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 24) {
+          growSelection(hit);
+          lastTap.current = null;
+          return;
+        }
+      }
+      store.set({ anchor: hit });
+      // clicking inside something already selected (e.g. a letter of a selected word) drags the selection
+      if (!deep && !e.shiftKey && st.selection.some((r) => containsHit(L, r, hit))) {
+        beginElemGesture('move', e, st.selection);
+        return;
+      }
+      const ref = deep ? deepRef(L, hit) : resolveRef(hit, st.mode, L);
       if (ref && !block?.locked) {
         const already = st.selection.some((r) => sameRef(r, ref));
         let sel = st.selection;
-        if (e.shiftKey || e.metaKey || e.ctrlKey) sel = already ? sel.filter((r) => !sameRef(r, ref)) : [...sel, ref];
+        if (e.shiftKey) sel = already ? sel.filter((r) => !sameRef(r, ref)) : [...sel, ref];
         else if (!already) sel = [ref];
         store.select(sel);
         beginElemGesture('move', e, sel);
@@ -245,6 +269,24 @@ export function Canvas({
       (p) => g.refs.reduce((acc, r) => setEdit(acc, r, fn(r, g.edits0.get(refId(r)) ?? {})), p),
       { record: false },
     );
+  };
+
+  /** Double-click / double-tap: select the next level up (letter → connected → word → text). */
+  const growSelection = (hit: HitTarget) => {
+    const levels = levelsFor(layoutsRef.current, hit);
+    if (!levels.length) return;
+    const cur = store.get().selection;
+    const idx = cur.length === 1 ? levels.findIndex((l) => sameRef(l.ref, cur[0])) : -1;
+    const next = levels[Math.min(levels.length - 1, idx + 1)];
+    store.set({ anchor: hit });
+    store.select([next.ref]);
+    flash(`${next.name} selected — double-click again for more, Esc to step back`);
+  };
+
+  const onDoubleClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    // pointer capture during the clicks makes the canvas the event target: look at what is under the cursor
+    const hit = hitFromElement(document.elementFromPoint(e.clientX, e.clientY)) ?? hitFromElement(e.target as Element);
+    if (hit) growSelection(hit);
   };
 
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -496,6 +538,7 @@ export function Canvas({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onPointerLeave={() => setHover(null)}
+        onDoubleClick={onDoubleClick}
         onWheel={onWheel}
         onContextMenu={(e) => e.preventDefault()}
       >
@@ -520,6 +563,7 @@ export function Canvas({
           {single && single.kind === 'glyph' && curveEdit && <PointHandles layouts={layouts} r={single} hs={hs} z={z} />}
         </g>
       </svg>
+      <Breadcrumb store={store} layouts={layouts} />
       {hint && <div className="canvas-hint">{hint}</div>}
       {snapNote && dragging && <div className="canvas-hint snap">{snapNote}</div>}
       {groupT && bb && !dragging && (wordStylesList === null || wordStylesList.length > 1) && (
@@ -597,6 +641,35 @@ function floatStyle(b: BBox, v: View, wrap: HTMLDivElement | null): React.CSSPro
   if (cx > W - 220) return { ...base, right: 8, transform: `translateY(${ty})` };
   if (cx < 220) return { ...base, left: 8, transform: `translateY(${ty})` };
   return { ...base, left: cx, transform: `translate(-50%, ${ty})` };
+}
+
+/** Where am I? Every level that contains the last-clicked piece; tap one to select it. */
+function Breadcrumb({ store, layouts }: { store: Store; layouts: Map<string, LaidBlock> }) {
+  const anchor = useStore(store, (s) => s.anchor);
+  const selection = useStore(store, (s) => s.selection);
+  if (!anchor || selection.length !== 1 || selection[0].block !== anchor.block) return null;
+  const levels = levelsFor(layouts, anchor);
+  if (!levels.some((l) => sameRef(l.ref, selection[0]))) return null;
+  return (
+    <nav className="crumbs" aria-label="Selection level">
+      {[...levels].reverse().map((l, i) => {
+        const on = sameRef(l.ref, selection[0]);
+        return (
+          <span key={refId(l.ref)} className="crumb-wrap">
+            {i > 0 && <span className="crumb-sep">›</span>}
+            <button type="button" className={`crumb${on ? ' on' : ''}`} aria-current={on ? 'true' : undefined} onClick={() => store.select([l.ref])} title={`Select this ${l.name.toLowerCase()}`}>
+              <span className="crumb-name">{l.name}</span>
+              {l.label && (
+                <span className="crumb-label" dir="rtl" lang="ar">
+                  {l.label.length > 18 ? `${l.label.slice(0, 18)}…` : l.label}
+                </span>
+              )}
+            </button>
+          </span>
+        );
+      })}
+    </nav>
+  );
 }
 
 const SNAP_PX = 12;

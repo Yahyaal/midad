@@ -365,3 +365,40 @@ test('phrase library: search, open as new, add to canvas, replace text — all u
   await page.getByRole('button', { name: /Projects/ }).click();
   await expect(page.locator('.project-list li')).toHaveCount(2);
 });
+
+test('double-click grows the selection to the whole word, which then drags as one; Esc steps back', async ({ page }) => {
+  await page.getByRole('button', { name: /Letter/ }).click();
+  const p = await pointOn(page, 'c1.0');
+  await page.mouse.click(p.x, p.y);
+  await expect(page.locator('.crumb.on .crumb-name')).toHaveText('Letter');
+  await page.mouse.dblclick(p.x, p.y);
+  await expect(page.locator('.crumb.on .crumb-name')).toHaveText('Connected');
+  await page.mouse.dblclick(p.x, p.y);
+  await expect(page.locator('.crumb.on .crumb-name')).toHaveText('Word');
+  // drag from a different letter of the same word: the whole word moves
+  await drag(page, await pointOn(page, 'c3.0'), 0, -40);
+  const e = (await savedProject(page)).blocks[0].edits;
+  expect(Object.keys(e)).toEqual(['w0']);
+  await expect(page.locator('[data-join]')).toHaveCount(0);
+  // Esc steps back down, then clears
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.crumb.on .crumb-name')).toHaveText('Connected');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.crumb.on .crumb-name')).toHaveText('Letter');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.crumbs')).toHaveCount(0);
+  // breadcrumb jumps straight to a level (the word moved, so find the letter again)
+  const q = await pointOn(page, 'c1.0');
+  await page.mouse.click(q.x, q.y);
+  await page.locator('.crumb', { hasText: 'Text' }).click();
+  await expect(page.locator('.panel-section h3').first()).toHaveText('Text block');
+});
+
+test('Ctrl-click picks a single letter even in Word mode', async ({ page }) => {
+  await page.getByRole('button', { name: /Word/ }).click();
+  const p = await pointOn(page, 'c1.0');
+  await page.keyboard.down('Control');
+  await page.mouse.click(p.x, p.y);
+  await page.keyboard.up('Control');
+  await expect(page.locator('.crumb.on .crumb-name')).toHaveText('Letter');
+});

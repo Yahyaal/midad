@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ElemRef, Project } from './core/model';
+import { type ElemRef, type Project, refId } from './core/model';
 import { uid } from './core/model';
 import {
   deleteProject,
@@ -23,7 +23,7 @@ import { applyPreview, type Preview } from './ui/VariantPicker';
 import { runTidy, TidyBar, type TidySession, tidyScope } from './ui/TidyBar';
 import { Inspector } from './ui/Inspector';
 import { projectToSvg, svgToPngBlob } from './ui/exporters';
-import { moveEdit, elemInfo } from './ui/selection';
+import { moveEdit, elemInfo, levelsFor } from './ui/selection';
 import { computeLayouts, useLayouts } from './ui/useLayouts';
 
 function initialProject(): Project {
@@ -279,8 +279,17 @@ function useShortcuts(store: Store, layouts: ReturnType<typeof computeLayouts>, 
         return;
       }
       if (e.key === 'Escape') {
+        // step back down towards the clicked letter before clearing the selection
+        if (st.anchor && st.selection.length === 1) {
+          const levels = levelsFor(layoutsRef.current, st.anchor);
+          const idx = levels.findIndex((l) => refId(l.ref) === refId(st.selection[0]));
+          if (idx > 0) {
+            store.select([levels[idx - 1].ref]);
+            return;
+          }
+        }
         store.select([]);
-        store.set({ curveEdit: false });
+        store.set({ curveEdit: false, anchor: null });
         return;
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && st.selection.length) {
@@ -497,7 +506,8 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
         <h4>Keys</h4>
         <ul className="keys">
           <li><kbd>[</kbd> <kbd>]</kbd> previous / next form of the selected letter · <kbd>T</kbd> Tidy</li>
-          <li><kbd>1</kbd>–<kbd>5</kbd> selection level · <kbd>Shift</kbd>+click add to selection</li>
+          <li><b>Double-click</b> (double-tap) grows the selection: letter → connected → word → whole text; <kbd>Esc</kbd> steps back down. The breadcrumb at the top shows the levels — tap one to jump.</li>
+          <li><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+click picks the single letter (or dot/mark) in any mode · <kbd>Shift</kbd>+click adds to the selection · <kbd>1</kbd>–<kbd>5</kbd> selection level</li>
           <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> redo</li>
           <li>Arrows nudge (<kbd>Shift</kbd> ×10) · <kbd>Delete</kbd> reset selection · <kbd>Esc</kbd> deselect</li>
           <li>Drag empty space to pan · <kbd>Ctrl</kbd>+wheel or pinch to zoom · Shift while rotating snaps 15°</li>

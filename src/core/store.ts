@@ -24,6 +24,8 @@ export interface State {
   curveEdit: boolean;
   /** dragging a letter pulls its joined neighbours a little, so the word bends instead of breaking */
   follow: boolean;
+  /** the piece last clicked: the anchor for growing/shrinking the selection by level */
+  anchor: { block: string; glyph?: string; piece?: string; kind?: string; join?: string } | null;
 }
 
 const HISTORY_LIMIT = 200;
@@ -31,7 +33,7 @@ const HISTORY_LIMIT = 200;
 type Listener = () => void;
 
 export function createStore(initial: Project) {
-  let state: State = { project: initial, selection: [], mode: 'letter', past: [], future: [], rev: 0, showGuides: true, curveEdit: false, follow: true };
+  let state: State = { project: initial, selection: [], mode: 'letter', past: [], future: [], rev: 0, showGuides: true, curveEdit: false, follow: true, anchor: null };
   const listeners = new Set<Listener>();
   let gestureSnapshot: Project | null = null;
   let gestureRecorded = false;

@@ -127,3 +127,61 @@ export function normDeg(d: number): number {
   if (x <= -180) x += 360;
   return Math.round(x * 100) / 100;
 }
+
+// Levels ---------------------------------------------------------------------
+
+export interface Level {
+  ref: ElemRef;
+  /** "Letter", "Connected", "Word", "Text" … */
+  name: string;
+  /** what it covers, e.g. the word's text */
+  label: string;
+}
+
+function spanText(lb: LaidBlock, kind: 'word' | 'group', key: string): string {
+  const start = Number(key.slice(1));
+  const arr = kind === 'word' ? lb.seg.wordOf : lb.seg.groupOf;
+  let end = start;
+  while (end < lb.block.text.length && arr[end] === start) end++;
+  return lb.block.text.slice(start, end);
+}
+
+/** Every selectable level that contains the clicked piece, deepest first, without duplicates. */
+export function levelsFor(layouts: Map<string, LaidBlock>, hit: HitTarget): Level[] {
+  const lb = layouts.get(hit.block);
+  if (!lb) return [];
+  const out: Level[] = [];
+  const b = hit.block;
+  if (hit.join) {
+    out.push({ ref: { block: b, kind: 'join', key: hit.join }, name: 'Join', label: '' });
+    const j = lb.joins.find((x) => x.key === hit.join);
+    if (j) return [...out, ...levelsFor(layouts, { block: b, glyph: j.a, piece: j.a, kind: 'body' }).slice(1)];
+  }
+  if (!hit.glyph) return out;
+  const own = lb.owners.get(hit.glyph);
+  if (!own) return out;
+  const g = lb.glyphs.find((x) => x.key === hit.glyph);
+  if (hit.kind === 'dot' && hit.piece) out.push({ ref: { block: b, kind: 'dot', key: hit.piece }, name: 'Dots', label: g?.char ?? '' });
+  if (hit.kind === 'mark' && g) out.push({ ref: { block: b, kind: 'glyph', key: g.key }, name: 'Mark', label: `◌${g.char}` });
+  const letter = lb.glyphs.find((x) => x.key === own.letter);
+  out.push({ ref: { block: b, kind: 'glyph', key: own.letter }, name: 'Letter', label: letter?.char ?? '' });
+  const groupText = own.group ? spanText(lb, 'group', own.group) : '';
+  const wordText = own.word ? spanText(lb, 'word', own.word) : '';
+  if (own.group && groupText.replace(/[^ؠ-يٮ-ۓ]/g, '').length > 1 && groupText !== wordText)
+    out.push({ ref: { block: b, kind: 'group', key: own.group }, name: 'Connected', label: groupText });
+  if (own.word) out.push({ ref: { block: b, kind: 'word', key: own.word }, name: 'Word', label: wordText });
+  out.push({ ref: { block: b, kind: 'block', key: '' }, name: 'Text', label: lb.block.text.split('\n')[0] });
+  return out;
+}
+
+/** Does the selected element contain the clicked piece? */
+export function containsHit(layouts: Map<string, LaidBlock>, sel: ElemRef, hit: HitTarget): boolean {
+  if (sel.block !== hit.block) return false;
+  if (sel.kind === 'block') return true;
+  return levelsFor(layouts, hit).some((l) => refId(l.ref) === refId(sel));
+}
+
+/** The deepest sensible element under a click (Ctrl/⌘-click): dot or mark, otherwise the letter. */
+export function deepRef(layouts: Map<string, LaidBlock>, hit: HitTarget): ElemRef | null {
+  return levelsFor(layouts, hit)[0]?.ref ?? null;
+}

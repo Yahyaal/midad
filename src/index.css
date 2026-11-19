@@ -1097,3 +1097,57 @@ kbd {
   gap: 5px;
   margin-top: auto;
 }
+
+/* Selection breadcrumb */
+.crumbs {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(247, 244, 238, 0.96);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  padding: 3px 6px;
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.crumb-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+.crumb-sep {
+  color: var(--muted);
+  padding: 0 2px;
+}
+.crumb {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-height: 28px;
+  padding: 2px 9px;
+  border-radius: 14px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 12px;
+}
+.crumb.on {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  color: #fff;
+}
+.crumb-name {
+  font-weight: 600;
+}
+.crumb-label {
+  font-family: 'Amiri UI', serif;
+  font-size: 15px;
+}
+.canvas-hint {
+  top: 54px;
+}
