@@ -424,3 +424,25 @@ test('ḥarakāt colour, artboard preset and mirror copy', async ({ page }) => {
   await page.keyboard.press('Control+z');
   await expect(page.locator('.layers li')).toHaveCount(1);
 });
+
+test('first-time visitors get a welcome once', async ({ page }) => {
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(page.getByRole('dialog', { name: 'Welcome to Midad' })).toBeVisible();
+  await page.getByRole('button', { name: 'Browse phrases' }).click();
+  await expect(page.getByRole('dialog', { name: 'Phrase library' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('dialog', { name: 'Welcome to Midad' })).toHaveCount(0);
+});
+
+test('dragging a block near the centre snaps to it with a guide', async ({ page }) => {
+  await page.getByRole('button', { name: /Block/ }).click();
+  const p = await pointOn(page, 'c6.0');
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 4; i++) await page.mouse.move(p.x + i, p.y + i);
+  await expect(page.locator('.smart-guides line')).not.toHaveCount(0);
+  await expect(page.locator('.canvas-hint.snap')).toHaveText(/Centred|Aligned/);
+  await page.mouse.up();
+  await expect(page.locator('.smart-guides')).toHaveCount(0);
+});

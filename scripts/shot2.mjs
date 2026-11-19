@@ -6,7 +6,7 @@ const b = await chromium.launch();
 const ctx = scenario.includes('mobile') ? await b.newContext({ ...devices['Pixel 7'] }) : await b.newContext({ viewport: { width: 1440, height: 900 } });
 const p = await ctx.newPage();
 await p.goto('http://localhost:5179/');
-await p.evaluate(() => localStorage.clear());
+await p.evaluate(() => { localStorage.clear(); localStorage.setItem('midad:welcomed', '1'); });
 await p.goto('http://localhost:5179/');
 await p.waitForSelector('[data-piece]');
 const zoom = async (n) => { for (let i = 0; i < n; i++) { await p.evaluate(() => window.dispatchEvent(new CustomEvent('midad:zoom', { detail: 1.4 }))); await p.waitForTimeout(40); } };

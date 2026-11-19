@@ -50,6 +50,10 @@ interface Gesture {
   followers?: { ref: ElemRef; w: number; e0: Edit }[];
   /** seamless positions to snap a single dragged letter to */
   snaps?: { t: Pt; label: string }[];
+  /** smart guides for words/blocks: selection box at start and alignment targets */
+  guideBox?: BBox;
+  guideX?: number[];
+  guideY?: number[];
   pinch?: { a: Pt; b: Pt; ids: [number, number]; onSelection: boolean };
 }
 
@@ -83,6 +87,7 @@ export function Canvas({
   const [dragging, setDragging] = useState(false);
   const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
   const [snapNote, setSnapNote] = useState<string | null>(null);
+  const [guides, setGuides] = useState<{ x: number | null; y: number | null } | null>(null);
   // the forms strip must not move under the pointer while previews reflow the word
   const stripHover = useRef(false);
   const stripStyle = useRef<React.CSSProperties | null>(null);
@@ -152,6 +157,24 @@ export function Canvas({
       moved: false,
       ...extra,
     };
+    if (type === 'move' && refs.length && refs.every((r) => r.kind === 'block' || r.kind === 'word' || r.kind === 'group')) {
+      const bb0 = selectionBBox(layoutsRef.current, refs);
+      if (bb0) {
+        const xs = [st.project.width / 2];
+        const ys = [st.project.height / 2];
+        for (const b of st.project.blocks) {
+          if (refs.some((r) => r.block === b.id)) continue;
+          const lb = layoutsRef.current.get(b.id);
+          if (!lb) continue;
+          const c = bboxCenter(lb.bbox);
+          xs.push(c[0]);
+          ys.push(c[1], b.y);
+        }
+        gesture.current.guideBox = bb0;
+        gesture.current.guideX = xs;
+        gesture.current.guideY = ys;
+      }
+    }
     if (type === 'move' && st.mode === 'letter') {
       const glyphRefs = refs.filter((r) => r.kind === 'glyph');
       const lb = glyphRefs.length ? layoutsRef.current.get(glyphRefs[0].block) : undefined;
@@ -376,6 +399,20 @@ export function Canvas({
             }
           }
         }
+        // smart guides: centre lines of the artboard and of other blocks
+        let gx: number | null = null;
+        let gy: number | null = null;
+        if (g.guideBox && !e.altKey) {
+          const z = viewRef.current.z;
+          const c: Pt = [(g.guideBox.x0 + g.guideBox.x1) / 2 + mv[0], (g.guideBox.y0 + g.guideBox.y1) / 2 + mv[1]];
+          const near = (v: number, list: number[]) => list.reduce<number | null>((best, t) => (Math.abs(t - v) * z < GUIDE_PX && (best === null || Math.abs(t - v) < Math.abs(best - v)) ? t : best), null);
+          gx = near(c[0], g.guideX ?? []);
+          gy = near(c[1], g.guideY ?? []);
+          if (gx !== null) mv = [mv[0] + gx - c[0], mv[1]];
+          if (gy !== null) mv = [mv[0], mv[1] + gy - c[1]];
+          if (gx !== null || gy !== null) note = gx !== null && gy !== null ? 'Centred' : 'Aligned';
+        }
+        setGuides(gx === null && gy === null ? null : { x: gx, y: gy });
         setSnapNote(note);
         const followers = g.followers ?? [];
         store.update(
@@ -471,6 +508,7 @@ export function Canvas({
       gesture.current = null;
       setDragging(false);
       setSnapNote(null);
+      setGuides(null);
       store.endGesture();
     }
   };
@@ -557,6 +595,12 @@ export function Canvas({
               return el && r.kind !== 'join' ? <Box key={refId(r)} b={el.bbox} z={z} className="sel-item" /> : null;
             })}
           </g>
+          {guides && (
+            <g className="smart-guides" style={{ pointerEvents: 'none' }}>
+              {guides.x !== null && <line x1={guides.x} x2={guides.x} y1={-40} y2={project.height + 40} strokeWidth={1.2 / z} />}
+              {guides.y !== null && <line y1={guides.y} y2={guides.y} x1={-40} x2={project.width + 40} strokeWidth={1.2 / z} />}
+            </g>
+          )}
           {showTransformHandles && <TransformHandles b={bb} hs={hs} z={z} />}
           <JoinHandles layouts={layouts} selection={selection} mode={mode} hs={hs} z={z} />
           {single && single.kind === 'glyph' && mode === 'letter' && !curveEdit && <StretchHandle layouts={layouts} r={single} hs={hs} z={z} />}
@@ -673,6 +717,7 @@ function Breadcrumb({ store, layouts }: { store: Store; layouts: Map<string, Lai
 }
 
 const SNAP_PX = 12;
+const GUIDE_PX = 7;
 const BASELINE_PX = 7;
 
 function clampZoom(z: number) {

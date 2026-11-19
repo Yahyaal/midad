@@ -2,7 +2,10 @@ import { expect, type Page } from '@playwright/test';
 
 export async function freshApp(page: Page) {
   await page.goto('/');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem('midad:welcomed', '1');
+  });
   await page.goto('/');
   await expect(page.locator('[data-piece]').first()).toBeVisible();
 }

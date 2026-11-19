@@ -9,7 +9,7 @@ const ctx = opt.mobile ? await b.newContext({ ...devices['Pixel 7'] }) : await b
 const p = await ctx.newPage();
 const url = opt.url || 'http://localhost:5179/';
 await p.goto(url);
-await p.evaluate(() => localStorage.clear());
+await p.evaluate(() => { localStorage.clear(); localStorage.setItem('midad:welcomed', '1'); });
 await p.goto(url);
 await p.waitForSelector('[data-piece]');
 if (opt.sample) {
