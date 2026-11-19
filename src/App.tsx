@@ -18,6 +18,7 @@ import { getLoadedFont } from './core/fonts';
 import { harvestForms, joinPosition } from './core/variants';
 import { createStore, getEdit, MODES, setEdit, type Store, useStore } from './core/store';
 import { Canvas } from './ui/Canvas';
+import { LibraryDialog } from './ui/LibraryDialog';
 import { applyPreview, type Preview } from './ui/VariantPicker';
 import { runTidy, TidyBar, type TidySession, tidyScope } from './ui/TidyBar';
 import { Inspector } from './ui/Inspector';
@@ -44,7 +45,7 @@ export default function App() {
   }, [project, preview, compare, tidy]);
   const { layouts, loading, error } = useLayouts(shown);
   const [toast, setToast] = useState<string | null>(null);
-  const [panel, setPanel] = useState<'none' | 'projects' | 'export' | 'help'>('none');
+  const [panel, setPanel] = useState<'none' | 'projects' | 'export' | 'help' | 'library'>('none');
   const [sheetOpen, setSheetOpen] = useState(false);
   const notify = (m: string) => {
     setToast(m);
@@ -100,12 +101,13 @@ export default function App() {
       {panel === 'projects' && <ProjectsDialog store={store} onClose={() => setPanel('none')} notify={notify} />}
       {panel === 'export' && <ExportDialog store={store} onClose={() => setPanel('none')} notify={notify} />}
       {panel === 'help' && <HelpDialog onClose={() => setPanel('none')} />}
+      {panel === 'library' && <LibraryDialog store={store} onClose={() => setPanel('none')} notify={notify} />}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );
 }
 
-function TopBar({ store, onPanel, onTidy }: { store: Store; onPanel: (p: 'projects' | 'export' | 'help') => void; onTidy: () => void }) {
+function TopBar({ store, onPanel, onTidy }: { store: Store; onPanel: (p: 'projects' | 'export' | 'help' | 'library') => void; onTidy: () => void }) {
   const name = useStore(store, (s) => s.project.name);
   const canUndo = useStore(store, (s) => s.past.length > 0);
   const canRedo = useStore(store, (s) => s.future.length > 0);
@@ -125,6 +127,9 @@ function TopBar({ store, onPanel, onTidy }: { store: Store; onPanel: (p: 'projec
         </button>
         <button type="button" className="tidy-btn" onClick={onTidy} title="Tidy (T): smooth jumps, turn gaps into kashida, fix spacing and stray dots. Works on the selection, or everything. One undo restores it.">
           ✨<span className="lbl">Tidy</span>
+        </button>
+        <button type="button" onClick={() => onPanel('library')} title="Phrase library: well-known phrases to start from">
+          📜<span className="lbl">Library</span>
         </button>
         <button type="button" onClick={() => onPanel('projects')} title="Projects: open, new, save to file">
           ☰<span className="lbl">Projects</span>
@@ -483,6 +488,7 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
           <li><b>Moving letters smoothly</b>: with <i>Neighbours follow</i> on, joined neighbours come along part of the way (mostly up/down), so the word bends instead of breaking. While dragging, a letter snaps back to its original place, onto the baseline, or into line with a moved neighbour. Hold <kbd>Alt</kbd> to move it alone and without snapping.</li>
           <li><b>Dots &amp; marks</b>: dots (nuqaṭ) and tashkīl move independently of their letter.</li>
           <li><b>Letter forms</b>: when you tap a letter, a strip shows the other shapes the font designer drew for it (and elongated versions of final letters). Hover to preview, click to swap, or press <kbd>[</kbd> <kbd>]</kbd> to cycle. The word re-flows around the new shape, and its neighbours change to the shapes the font pairs with it.</li>
+          <li><b>📜 Library</b>: well-known phrases (devotion, greetings, proverbs, poetry, single words), fully vocalised. Open one as a new composition, add it to the canvas, or use it for the selected text.</li>
           <li><b>Ḥarakāt</b>: tap a letter and open the <i>حركة Haraka</i> tab (or the panel) to choose the letter's vowel, and add <i>Shadda</i> on top. Only valid choices are shown: tanwīn at the end of a word (tanwīn fatḥ also before a final ا/ى), no sukūn or shadda on a word's first letter, no ḥaraka on a long-vowel alif, kasra only under إ. Hover to preview; undo reverts.</li>
           <li><b>Word styles</b>: in <i>Connected</i> mode, tapping a joined word offers complete versions of it built from the font's own forms: <i>Compact</i>, <i>Stacked</i>, <i>Flowing</i>, <i>Elongated</i>. Hover to preview, click to apply, undo to go back. Your moves are kept; only letter shapes, madd and kashida change.</li>
           <li><b>✨ Tidy</b> (<kbd>T</kbd>) cleans up after free editing while keeping your intent, aiming for the feel of a pen: sizes change gradually from letter to letter, sideways-stretched letters become proper elongations, kashidas sag slightly, jumps along each word are evened out, turns sideways pulls into kashida, swaps in better-fitting letter forms, restores spacing between words, and brings stray dots back. It works on the selection, or the whole composition when nothing is selected. Use the strength slider, hold <i>Compare</i> to see the before, and <i>Undo tidy</i> (or <kbd>Ctrl</kbd>+<kbd>Z</kbd>) to go back.</li>

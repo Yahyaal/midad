@@ -1024,3 +1024,76 @@ kbd {
 .haraka-wrap.grid .haraka-note {
   padding: 4px 0 0;
 }
+
+/* Phrase library */
+.dialog.library {
+  width: min(860px, 100%);
+}
+.lib-ar {
+  font-family: 'Amiri UI', serif;
+  font-weight: normal;
+  color: var(--muted);
+  margin-inline-start: 8px;
+}
+.lib-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.lib-search {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px 10px;
+}
+.lib-cats {
+  margin: 10px 0;
+}
+.lib-cats [lang='ar'] {
+  font-family: 'Amiri UI', serif;
+  font-size: 14px;
+}
+.lib-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 10px;
+}
+.lib-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+}
+.lib-preview {
+  width: 100%;
+  height: 84px;
+  fill: #3b2514;
+  background: var(--panel);
+  border-radius: 6px;
+}
+.lib-text {
+  font-family: 'Amiri UI', serif;
+  font-size: 17px;
+  line-height: 1.7;
+}
+.lib-meaning {
+  font-size: 12.5px;
+}
+.lib-source {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}
+.lib-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: auto;
+}

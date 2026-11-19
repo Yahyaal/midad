@@ -82,6 +82,15 @@ if (scenario === 'haraka') {
   await p.getByRole('tab', { name: /Haraka/ }).click();
   if (process.env.PICK) await p.locator('.variant-float .variant.haraka').nth(Number(process.env.PICK)).click();
 }
+if (scenario === 'library' || scenario === 'library-open') {
+  await p.getByRole('button', { name: /Library/ }).click();
+  if (process.env.Q) await p.getByLabel('Search phrases').fill(process.env.Q);
+  if (process.env.CAT) await p.locator('.lib-cats .chip', { hasText: process.env.CAT }).click();
+  if (scenario === 'library-open') {
+    await p.locator('.lib-card').first().getByRole('button', { name: 'Open as new' }).click();
+    await p.waitForTimeout(600);
+  }
+}
 if (scenario === 'export') await p.getByRole('button', { name: /Export/ }).click();
 if (scenario === 'gold') {
   await p.getByRole('radio', { name: 'Gold' }).click();

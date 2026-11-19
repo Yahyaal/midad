@@ -93,6 +93,16 @@ never shadda + sukūn). Offered per letter and position:
   إ: kasra · آ، ى، ٱ: none · ة: vowels and tanwīn, no sukūn/shadda;
 * dagger alif only on ه ذ ل م ن ك و (هٰذا، ذٰلك، الرحمٰن، لٰكن).
 
+## Phrase library (v0.9)
+`src/core/phrases.ts` holds ~54 fully vocalised phrases in six categories (devotion, greetings, proverbs &
+wisdom, sayings about writing, classical poetry, single words), each with an English meaning and source.
+Only classical or out-of-copyright sources are used (Qurʾān, proverbs, al-Mutanabbī, Imruʾ al-Qays,
+al-Shābbī, Shawqī). Tests check that every phrase shapes without missing glyphs and that every ḥaraka is
+valid under the ḥarakāt rules. The 📜 Library dialog previews phrases in the current script (fast shaped
+outlines), with search in Arabic (with or without tashkīl) or English, and can open a phrase as a new
+composition, add it to the canvas, or replace the selected text (undoable). To add phrases, append to
+`PHRASES`; the tests will flag invalid marks.
+
 ## Known limits
 * Word styles occasionally pick a compact combination where one letter just touches another (e.g. ل over خ).
 * Pulling letters along steep joins can leave small shards where the pen stroke meets the outline.

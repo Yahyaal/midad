@@ -334,3 +334,34 @@ test('the alif inside سامي offers no ḥaraka and says why; the last letter 
   await page.getByRole('tab', { name: /Haraka/ }).click();
   await expect(page.locator('.variant-float .variant.haraka', { hasText: 'Tanwīn u' })).toBeVisible();
 });
+
+test('phrase library: search, open as new, add to canvas, replace text — all undoable or saved', async ({ page }) => {
+  await page.getByRole('button', { name: /Library/ }).click();
+  await page.getByLabel('Search phrases').fill('patience');
+  const cards = page.locator('.lib-card');
+  await expect(cards.first()).toBeVisible();
+  expect(await cards.count()).toBeGreaterThanOrEqual(2);
+  await page.getByLabel('Search phrases').fill('الصبر');
+  await expect(cards).toHaveCount(1);
+  await cards.first().getByRole('button', { name: 'Add to canvas' }).click();
+  await expect(page.locator('.layers li')).toHaveCount(2);
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('.layers li')).toHaveCount(1);
+
+  await page.getByRole('button', { name: /Library/ }).click();
+  await page.locator('.lib-cats .chip', { hasText: 'Greetings' }).click();
+  await page.locator('.lib-card', { hasText: 'Good morning' }).getByRole('button', { name: 'Use for selected text' }).click();
+  await expect(page.locator('.text-input')).toHaveValue('صَبَاحُ الْخَيْرِ');
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('.text-input')).toHaveValue('يحيى، سامي، رامي');
+
+  await page.getByRole('button', { name: /Library/ }).click();
+  await page.getByLabel('Tashkīl').uncheck();
+  await page.getByLabel('Search phrases').fill('أمل');
+  await expect(cards).toHaveCount(1);
+  await cards.first().getByRole('button', { name: 'Open as new' }).click();
+  await expect(page.locator('.text-input')).toHaveValue('أمل');
+  // the previous composition is kept in the browser's project list
+  await page.getByRole('button', { name: /Projects/ }).click();
+  await expect(page.locator('.project-list li')).toHaveCount(2);
+});
