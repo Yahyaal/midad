@@ -130,7 +130,7 @@ export function Artwork({ project, layouts, transparent, interactive, idPrefix =
                     key={pc.key}
                     d={pc.d}
                     transform={matToSvg(pc.world)}
-                    fill={blockFill}
+                    fill={ink.markColor && (pc.kind === 'mark' || (ink.markDots && pc.kind === 'dot')) ? ink.markColor : blockFill}
                     fillOpacity={opacity}
                     data-block={interactive ? b.id : undefined}
                     data-glyph={interactive ? g.key : undefined}

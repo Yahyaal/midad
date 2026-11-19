@@ -63,6 +63,9 @@ export interface Ink {
   layering: number;
   /** 0..1 strength of edge bleed / texture */
   texture: number;
+  /** second colour for ḥarakāt (and optionally dots), as in illuminated manuscripts */
+  markColor?: string;
+  markDots?: boolean;
 }
 
 export interface Paper {
@@ -238,4 +241,34 @@ export function validateProject(x: unknown): Project {
   p.ink = { ...DEFAULT_INK, ...p.ink };
   p.paper = { ...DEFAULT_PAPER, ...p.paper };
   return p;
+}
+
+/** Change the artboard size, keeping the composition centred. */
+export function resizeArtboard(p: Project, width: number, height: number): Project {
+  const dx = (width - p.width) / 2;
+  const dy = (height - p.height) / 2;
+  return { ...p, width, height, blocks: p.blocks.map((b) => ({ ...b, x: b.x + dx, y: b.y + dy })) };
+}
+
+export const ARTBOARD_PRESETS: { id: string; label: string; w: number; h: number }[] = [
+  { id: 'wide', label: 'Wide 16:9', w: 1600, h: 900 },
+  { id: 'square', label: 'Square post', w: 1080, h: 1080 },
+  { id: 'portrait', label: 'Portrait post 4:5', w: 1080, h: 1350 },
+  { id: 'story', label: 'Story 9:16', w: 1080, h: 1920 },
+  { id: 'a4p', label: 'A4 portrait', w: 1240, h: 1754 },
+  { id: 'a4l', label: 'A4 landscape', w: 1754, h: 1240 },
+  { id: 'banner', label: 'Banner 3:1', w: 1800, h: 600 },
+];
+
+/** A mirror-image (musannā) copy of a block, placed symmetrically across the artboard's centre. */
+export function mirrorCopy(p: Project, blockId: string): { project: Project; id: string } | null {
+  const b = p.blocks.find((x) => x.id === blockId);
+  if (!b) return null;
+  const copy: Block = {
+    ...structuredClone(b),
+    id: uid('b'),
+    x: p.width - b.x,
+    transform: { ...b.transform, sx: -(b.transform.sx ?? 1), tx: -(b.transform.tx ?? 0) },
+  };
+  return { project: { ...p, blocks: [...p.blocks, copy] }, id: copy.id };
 }

@@ -37,3 +37,26 @@ describe('edits', () => {
     expect(() => validateProject({ hello: 1 })).toThrow();
   });
 });
+
+describe('artboard and mirror', () => {
+  it('resizing keeps the composition centred', async () => {
+    const { resizeArtboard } = await import('../model');
+    const p = newProject('x');
+    const b0 = p.blocks[0];
+    const q = resizeArtboard(p, 1080, 1080);
+    expect(q.width).toBe(1080);
+    expect(q.blocks[0].x - 540).toBeCloseTo(b0.x - 800);
+    expect(q.blocks[0].y - 540).toBeCloseTo(b0.y - 450);
+  });
+
+  it('mirror copy flips the block and places it symmetrically', async () => {
+    const { mirrorCopy } = await import('../model');
+    const p = newProject('x');
+    p.blocks[0].x = 1100;
+    const r = mirrorCopy(p, p.blocks[0].id)!;
+    const copy = r.project.blocks[1];
+    expect(copy.x).toBe(500);
+    expect(copy.transform.sx).toBe(-1);
+    expect(copy.id).not.toBe(p.blocks[0].id);
+  });
+});

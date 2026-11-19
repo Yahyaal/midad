@@ -402,3 +402,25 @@ test('Ctrl-click picks a single letter even in Word mode', async ({ page }) => {
   await page.keyboard.up('Control');
   await expect(page.locator('.crumb.on .crumb-name')).toHaveText('Letter');
 });
+
+test('ḥarakāt colour, artboard preset and mirror copy', async ({ page }) => {
+  await page.getByRole('button', { name: /Library/ }).click();
+  await page.getByLabel('Search phrases').fill('الصبر');
+  await page.locator('.lib-card').first().getByRole('button', { name: 'Open as new' }).click();
+  await page.getByRole('button', { name: 'Ḥarakāt #9b1c1c' }).click();
+  const fills = await page.$$eval('[data-kind="mark"]', (els) => [...new Set(els.map((e) => e.getAttribute('fill')))]);
+  expect(fills).toEqual(['#9b1c1c']);
+  const bodyFill = await page.locator('[data-kind="body"]').first().getAttribute('fill');
+  expect(bodyFill).not.toBe('#9b1c1c');
+
+  await page.getByLabel('Artboard size').selectOption('square');
+  const proj = await savedProject(page);
+  expect([proj.width, proj.height]).toEqual([1080, 1080]);
+
+  await page.getByTitle(/Mirror copy/).first().click();
+  await expect(page.locator('.layers li')).toHaveCount(2);
+  const p2 = await savedProject(page);
+  expect(p2.blocks[1].transform.sx).toBe(-1);
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('.layers li')).toHaveCount(1);
+});

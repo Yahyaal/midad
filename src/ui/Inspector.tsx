@@ -6,7 +6,7 @@ import { takesHarakat } from '../core/harakat';
 import { FONTS, getLoadedFont } from '../core/fonts';
 import { type Pt, applyVec, det, invert } from '../core/geometry';
 import type { LaidBlock } from '../core/layout';
-import { type Block, type Edit, type ElemRef, type InkStyle, type Project, newBlock } from '../core/model';
+import { ARTBOARD_PRESETS, type Block, type Edit, type ElemRef, type InkStyle, mirrorCopy, newBlock, type Project, resizeArtboard } from '../core/model';
 import { getEdit, mapBlock, reconnect, setEdit, setText, type Store, useStore } from '../core/store';
 import { NumberField, Section, Segmented, Slider } from './controls';
 import { elemInfo } from './selection';
@@ -428,6 +428,19 @@ function BlocksList({ store, project, activeId }: { store: Store; project: Proje
               </button>
               <button
                 type="button"
+                className="icon"
+                title="Mirror copy (musannā): a mirrored duplicate across the centre"
+                onClick={() => {
+                  const r = mirrorCopy(store.get().project, b.id);
+                  if (!r) return;
+                  store.update(() => r.project);
+                  store.select([{ block: r.id, kind: 'block', key: '' }]);
+                }}
+              >
+                ⇋
+              </button>
+              <button
+                type="button"
                 className="icon danger"
                 title="Delete"
                 disabled={project.blocks.length < 2}
@@ -454,6 +467,7 @@ const INK_STYLES: { id: InkStyle; label: string }[] = [
 ];
 
 const INK_SWATCHES = ['#4a2c17', '#1d1a17', '#0e2a47', '#6b1d1d', '#2f4a2a', '#7a5a2b'];
+const MARK_SWATCHES = ['#9b1c1c', '#b8860b', '#1d4e89', '#2f5d3a'];
 const PAPER_SWATCHES = ['#f4efe4', '#efe3c8', '#fbfaf6', '#e9dcc0', '#1f2a36', '#2b1d14'];
 
 function InkPanel({ store, project }: { store: Store; project: Project }) {
@@ -487,9 +501,47 @@ function InkPanel({ store, project }: { store: Store; project: Project }) {
       <label className="check">
         <input type="checkbox" checked={project.paper.ruled} onChange={(e) => setPaper({ ruled: e.target.checked })} /> Draw baselines on the paper
       </label>
+      <span className="field-label">Ḥarakāt colour</span>
+      <div className="swatches">
+        <button type="button" className={`swatch none${!project.ink.markColor ? ' on' : ''}`} onClick={() => setInk({ markColor: undefined })} aria-label="Same as the ink" title="Same as the ink">
+          ∅
+        </button>
+        {MARK_SWATCHES.map((c) => (
+          <button key={c} type="button" className={`swatch${project.ink.markColor === c ? ' on' : ''}`} style={{ background: c }} onClick={() => setInk({ markColor: c })} aria-label={`Ḥarakāt ${c}`} />
+        ))}
+        <input type="color" value={project.ink.markColor ?? '#9b1c1c'} onChange={(e) => setInk({ markColor: e.target.value }, false)} aria-label="Custom ḥarakāt colour" />
+      </div>
+      {project.ink.markColor && (
+        <label className="check">
+          <input type="checkbox" checked={!!project.ink.markDots} onChange={(e) => setInk({ markDots: e.target.checked })} /> Dots too
+        </label>
+      )}
+      <label className="field">
+        <span className="field-label">Artboard</span>
+        <select
+          aria-label="Artboard size"
+          value={ARTBOARD_PRESETS.find((x) => x.w === project.width && x.h === project.height)?.id ?? 'custom'}
+          onChange={(e) => {
+            const pr = ARTBOARD_PRESETS.find((x) => x.id === e.target.value);
+            if (pr) {
+              store.update((p) => resizeArtboard(p, pr.w, pr.h));
+              window.dispatchEvent(new CustomEvent('midad:fit'));
+            }
+          }}
+        >
+          {ARTBOARD_PRESETS.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.label} — {x.w}×{x.h}
+            </option>
+          ))}
+          <option value="custom" disabled>
+            Custom
+          </option>
+        </select>
+      </label>
       <div className="grid2">
-        <NumberField label="Width" value={project.width} onCommit={(v) => store.update((p) => ({ ...p, width: Math.max(100, Math.min(8000, Math.round(v))) }))} suffix="px" />
-        <NumberField label="Height" value={project.height} onCommit={(v) => store.update((p) => ({ ...p, height: Math.max(100, Math.min(8000, Math.round(v))) }))} suffix="px" />
+        <NumberField label="Width" value={project.width} onCommit={(v) => store.update((p) => resizeArtboard(p, Math.max(100, Math.min(8000, Math.round(v))), p.height))} suffix="px" />
+        <NumberField label="Height" value={project.height} onCommit={(v) => store.update((p) => resizeArtboard(p, p.width, Math.max(100, Math.min(8000, Math.round(v)))))} suffix="px" />
       </div>
     </Section>
   );

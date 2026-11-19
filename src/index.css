@@ -1151,3 +1151,9 @@ kbd {
 .canvas-hint {
   top: 54px;
 }
+.swatch.none {
+  background: #fff;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+}
