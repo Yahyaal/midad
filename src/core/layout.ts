@@ -422,7 +422,7 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
       const a = u / R;
       const X = mid + R * Math.sin(a);
       // a roundel is centred on the block's anchor; an arc keeps its middle on the baseline
-      const Y = -li * lh + (R * Math.cos(a) - R) + (block.arrange.shape === 'circle' ? R0 * 0.55 : 0);
+      const Y = -li * lh + (R * Math.cos(a) - R) + (block.arrange.shape === 'circle' ? R0 : 0);
       const cx = (box.x0 + box.x1) / 2;
       // rotate the group about its baseline centre, then move that point onto the arc
       arrangeOf.set(gk, compose(translate(X, Y), rotate((-a * 180) / Math.PI), translate(-cx, -baseY)));
