@@ -307,8 +307,13 @@ export function Canvas({
   };
 
   const onDoubleClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    // pointer capture during the clicks makes the canvas the event target: look at what is under the cursor
-    const hit = hitFromElement(document.elementFromPoint(e.clientX, e.clientY)) ?? hitFromElement(e.target as Element);
+    // pointer capture during the clicks makes the canvas the event target, so prefer the piece the
+    // pointer-down of these clicks recorded; fall back to whatever is under the cursor
+    const under = hitFromElement(document.elementFromPoint(e.clientX, e.clientY)) ?? hitFromElement(e.target as Element);
+    const anchor = store.get().anchor;
+    const sel = store.get().selection;
+    const anchorFits = anchor && sel.length === 1 && levelsFor(layoutsRef.current, anchor).some((l) => sameRef(l.ref, sel[0]));
+    const hit = anchorFits ? anchor : under;
     if (hit) growSelection(hit);
   };
 
