@@ -13,6 +13,8 @@ export interface Edit {
   stretch?: number;
   /** glyph: where to cut the outline for elongation, 0..1 across the glyph width (0 = left) */
   cut?: number;
+  /** glyph: how much an elongated stroke sags (1 = natural pen sag, 0 = straight) */
+  sag?: number;
   /** join: extra kashida length in font units */
   extend?: number;
   /** join: curvature of the joining stroke, -1..1 */
@@ -208,6 +210,7 @@ export function cleanEdit(e: Edit): Edit | undefined {
   if (e.stretch) {
     out.stretch = e.stretch;
     if (e.cut !== undefined) out.cut = e.cut;
+    if (e.sag !== undefined && e.sag !== 1) out.sag = e.sag;
   }
   if (e.extend) out.extend = e.extend;
   if (e.bend) out.bend = e.bend;

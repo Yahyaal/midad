@@ -298,3 +298,26 @@ test('word styles: preview on hover, apply on click, undo restores', async ({ pa
   expect((await savedProject(page)).blocks[0].edits).toEqual({});
   await expect.poll(wordSig).toBe(before);
 });
+
+test('a letter’s Haraka tab adds, changes and removes tashkīl, with undo', async ({ page }) => {
+  await page.getByRole('button', { name: /Letter/ }).click();
+  const p = await pointOn(page, 'c1.0');
+  await page.mouse.click(p.x, p.y);
+  await page.getByRole('tab', { name: /Haraka/ }).click();
+  const opts = page.locator('.variant-float .variant.haraka');
+  await expect(opts.first()).toHaveAttribute('aria-selected', 'true');
+  await opts.filter({ hasText: 'Fatḥa' }).click();
+  await expect(page.locator('.text-input')).toHaveValue('يحَيى، سامي، رامي');
+  await expect(page.locator('[data-kind="mark"]')).toHaveCount(1);
+  await opts.filter({ hasText: 'Shadda u' }).click();
+  await expect(page.locator('.text-input')).toHaveValue('يح\u0651\u064fيى، سامي، رامي');
+  await expect(page.locator('[data-kind="mark"]')).toHaveCount(2);
+  await opts.filter({ hasText: 'None' }).click();
+  await expect(page.locator('.text-input')).toHaveValue('يحيى، سامي، رامي');
+  await page.mouse.move(5, 300);
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('.text-input')).toHaveValue(/يح.+يى، سامي، رامي/);
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('.text-input')).toHaveValue('يحيى، سامي، رامي');
+});

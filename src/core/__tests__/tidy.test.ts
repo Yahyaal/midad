@@ -67,3 +67,30 @@ describe('tidy', () => {
     expect(bridges(tidyBlock(b, font(), { strength: 0 }).block)).toBeCloseTo(bridges(b), -1);
   });
 });
+
+describe('tidy pen passes', () => {
+  const font = () => nodeFont('amiri');
+  it('turns sideways stretching of a letter into madd, keeping the pen contrast', () => {
+    const b = newBlock({ text: 'يحيى', edits: { 'c0.0': { sx: 2.2 } } });
+    const { block, report } = tidyBlock(b, font(), { strength: 1 });
+    expect(block.edits['c0.0']?.sx ?? 1).toBeCloseTo(1, 1);
+    expect(block.edits['c0.0']?.stretch ?? 0).toBeGreaterThan(200);
+    expect(report.pen).toBeGreaterThan(0);
+  });
+
+  it('ramps sizes gradually along a word', () => {
+    const b = newBlock({ text: 'سامي', edits: { 'c1.0': { sx: 2, sy: 2 } } });
+    const { block } = tidyBlock(b, font(), { strength: 0.7 });
+    const sc = (k: string) => block.edits[k]?.sy ?? 1;
+    expect(sc('c1.0')).toBeLessThan(2);
+    expect(sc('c0.0')).toBeGreaterThan(1); // the س grows towards its big neighbour
+  });
+
+  it('gives kashidas a slight sag and waist, and drops forms from another font', () => {
+    const b = newBlock({ text: 'سامي', edits: { 'j0.0': { extend: 300 }, 'c2.0': { swap: 'aref-ruqaa:12' } } });
+    const { block } = tidyBlock(b, font(), { strength: 1 });
+    expect(block.edits['j0.0'].bend).toBeLessThan(0);
+    expect(block.edits['j0.0'].weight).toBeLessThan(1);
+    expect(block.edits['c2.0']).toBeUndefined();
+  });
+});

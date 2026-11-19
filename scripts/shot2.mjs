@@ -75,6 +75,13 @@ if (scenario === 'styles') {
   await p.waitForSelector('.variant-float .variant.word');
   if (process.env.PICK) await p.locator('.variant-float .variant.word').nth(Number(process.env.PICK)).click();
 }
+if (scenario === 'haraka') {
+  await zoom(Number(process.env.ZOOM ?? 1));
+  await p.getByRole('button', { name: /Letter/ }).click();
+  const pt = await pointOn(process.env.KEY || 'c1.0'); await p.mouse.click(pt.x, pt.y);
+  await p.getByRole('tab', { name: /Haraka/ }).click();
+  if (process.env.PICK) await p.locator('.variant-float .variant.haraka').nth(Number(process.env.PICK)).click();
+}
 if (scenario === 'export') await p.getByRole('button', { name: /Export/ }).click();
 if (scenario === 'gold') {
   await p.getByRole('radio', { name: 'Gold' }).click();

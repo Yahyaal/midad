@@ -21,6 +21,8 @@ export interface TidyOptions {
 }
 
 export interface TidyReport {
+  /** letter sizes evened out / sideways stretching turned into elongation */
+  pen: number;
   smoothed: number;
   kashidas: number;
   forms: number;
@@ -57,11 +59,62 @@ function inkBox(lb: LaidBlock, keys: Set<string>): BBox {
 export function tidyBlock(block: Block, font: LoadedFont, opts: TidyOptions): { block: Block; report: TidyReport } {
   const s = Math.max(0, Math.min(1, opts.strength));
   const upem = font.upem;
-  const report: TidyReport = { smoothed: 0, kashidas: 0, forms: 0, spaced: 0, dots: 0 };
+  const report: TidyReport = { pen: 0, smoothed: 0, kashidas: 0, forms: 0, spaced: 0, dots: 0 };
   const edits: Edits = structuredClone(block.edits);
   const inScope = (gk: string) => !opts.groups || opts.groups.has(gk);
   let lb = layoutBlock(block, font);
   const groups = groupsOf(lb);
+
+  // 0. Leftovers: letter forms saved for another font no longer apply.
+  for (const [key, e] of Object.entries(edits)) if (e.swap && !e.swap.startsWith(`${font.info.id}:`)) setE(edits, key, { ...e, swap: undefined });
+
+  // 0b. Pen passes. A pen keeps its stroke contrast: stretching a whole letter sideways widens its
+  // vertical strokes too, so convert that into elongation (madd), and let sizes change gradually
+  // from letter to letter instead of jumping.
+  const laplace = (v: number[], n: number) => {
+    for (let it = 0; it < n; it++) {
+      const next = [...v];
+      for (let i = 0; i < v.length; i++) {
+        const nb = [v[i - 1], v[i + 1]].filter((x) => x !== undefined) as number[];
+        next[i] = v[i] + 0.5 * (nb.reduce((a, b) => a + b, 0) / nb.length - v[i]);
+      }
+      v.splice(0, v.length, ...next);
+    }
+    return v;
+  };
+  for (const [gk, keys] of groups) {
+    if (!inScope(gk)) continue;
+    for (const k of keys) {
+      const e = edits[k];
+      if (!e) continue;
+      const sx = e.sx ?? 1;
+      const sy = e.sy ?? 1;
+      if (sx / sy > 1.15) {
+        const g = lb.glyphs.find((x) => x.key === k);
+        const w = g ? g.outline.bbox.x1 - g.outline.bbox.x0 : 0;
+        const nsx = sx + (sy - sx) * s;
+        const madd = (w * (sx - nsx)) / sy;
+        setE(edits, k, { ...e, sx: nsx, stretch: Math.round((e.stretch ?? 0) + madd) });
+        report.pen++;
+      } else if (sy / sx > 1.15) {
+        const m = Math.sqrt(sx * sy);
+        setE(edits, k, { ...e, sx: sx + (m - sx) * s, sy: sy + (m - sy) * s });
+        report.pen++;
+      }
+    }
+    if (keys.length < 2) continue;
+    const logs = keys.map((k) => Math.log(Math.sqrt((edits[k]?.sx ?? 1) * (edits[k]?.sy ?? 1))));
+    if (logs.every((x) => Math.abs(x) < 0.02)) continue;
+    const before = [...logs];
+    laplace(logs, Math.round(1 + 5 * s));
+    keys.forEach((k, i) => {
+      const f = Math.exp(before[i] + (logs[i] - before[i]) * Math.min(1, s * 1.15) - before[i]);
+      if (Math.abs(f - 1) < 0.01) return;
+      const e = edits[k] ?? {};
+      setE(edits, k, { ...e, sx: (e.sx ?? 1) * f, sy: (e.sy ?? 1) * f });
+      report.pen++;
+    });
+  }
 
   // 1. Smooth vertical offsets and rotations along each word (Laplacian smoothing).
   const iterations = Math.round(1 + 5 * s);
@@ -120,6 +173,17 @@ export function tidyBlock(block: Block, font: LoadedFont, opts: TidyOptions): { 
         carry -= take;
       }
     }
+  }
+
+  // kashidas drawn by hand sag a little and thin in the middle
+  for (const [key, e] of Object.entries(edits)) {
+    if (!key.startsWith('j') || !(e.extend ?? 0)) continue;
+    const gk = lb.owners.get(`c${key.slice(1)}`)?.group ?? '';
+    if (!inScope(gk)) continue;
+    const next: Edit = { ...e };
+    if (e.bend === undefined) next.bend = -0.07 * s;
+    if (e.weight === undefined) next.weight = 1 - 0.14 * s;
+    setE(edits, key, next);
   }
 
   // tiny leftovers snap to zero
@@ -229,6 +293,7 @@ export function tidyBlock(block: Block, font: LoadedFont, opts: TidyOptions): { 
     const r: Edit = { ...e };
     for (const p of ['tx', 'ty'] as const) if (r[p] !== undefined) r[p] = Math.round(r[p]! * 10) / 10;
     if (r.rot !== undefined) r.rot = Math.round(r.rot * 100) / 100;
+    for (const p of ['sx', 'sy'] as const) if (r[p] !== undefined) r[p] = Math.round(r[p]! * 1000) / 1000;
     setE(edits, key, r);
   }
   return { block: { ...block, edits }, report };
@@ -236,6 +301,7 @@ export function tidyBlock(block: Block, font: LoadedFont, opts: TidyOptions): { 
 
 export function describeReport(r: TidyReport): string {
   const parts: string[] = [];
+  if (r.pen) parts.push(`evened ${r.pen} letter size${r.pen > 1 ? 's' : ''}`);
   if (r.smoothed) parts.push(`smoothed ${r.smoothed} letter${r.smoothed > 1 ? 's' : ''}`);
   if (r.kashidas) parts.push(`${r.kashidas} gap${r.kashidas > 1 ? 's' : ''} → kashida`);
   if (r.forms) parts.push(`${r.forms} better form${r.forms > 1 ? 's' : ''}`);

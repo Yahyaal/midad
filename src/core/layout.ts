@@ -4,6 +4,7 @@ import { segment, type Segmentation } from './arabic';
 import { fontInfo, type GlyphOutline, type LoadedFont } from './fonts';
 import {
   type BBox,
+  type Contour,
   type Mat,
   type Pt,
   type PointFn,
@@ -119,13 +120,58 @@ export function editMat(e: Edit | undefined, pivot: Pt): Mat {
   return compose(translate(pivot[0] + tx, pivot[1] + ty), rotate(rot), scale(sx, sy), translate(-pivot[0], -pivot[1]));
 }
 
-function stretchFn(e: Edit | undefined, o: GlyphOutline): { f?: PointFn; cutX?: number; amount: number } {
+function stretchFn(e: Edit | undefined, o: GlyphOutline): { f?: PointFn; cutX?: number; amount: number; band?: [number, number] } {
   const s = e?.stretch ?? 0;
   const pts = e?.points;
   if (!s && !pts) return { amount: 0 };
   const cutX = lerp(o.bbox.x0, o.bbox.x1, e?.cut ?? 0.5);
-  const f: PointFn = (x, y) => (s && x < cutX ? [x - s, y] : [x, y]);
-  return { f, cutX: s ? cutX : undefined, amount: s };
+  if (!s) return { f: (x, y) => [x, y], amount: 0 };
+  // Pen-like madd: instead of sliding the left part out (a ruler-straight bar), warp a band left of
+  // the cut so the stroke lengthens smoothly, and let it sag a little as a drawn stroke does.
+  const w = o.bbox.x1 - o.bbox.x0;
+  const band = Math.max(w * 0.22, 40);
+  const sag = Math.min(s * 0.055, w * 0.07) * (e?.sag ?? 1);
+  const f: PointFn = (x, y) => {
+    if (x >= cutX) return [x, y];
+    const u = Math.min(1, (cutX - x) / band);
+    const k = u * u * (3 - 2 * u);
+    return [x - s * k, y - sag * Math.sin(Math.PI * k)];
+  };
+  return { f, cutX, amount: s, band: [cutX - band, cutX] };
+}
+
+/** Split curve/line segments that cross [x0, x1] into short lines so a warp there stays smooth. */
+function densify(contours: Contour[], x0: number, x1: number): Contour[] {
+  return contours.map((contour) => {
+    const out: Contour = [];
+    let cur: Pt = [0, 0];
+    let start: Pt = [0, 0];
+    for (const c of contour) {
+      if (c.t === 'M') {
+        cur = [c.v[0], c.v[1]];
+        start = cur;
+        out.push(c);
+        continue;
+      }
+      if (c.t === 'Z') {
+        out.push(c);
+        cur = start;
+        continue;
+      }
+      const xs = [cur[0], ...c.v.filter((_, i) => i % 2 === 0)];
+      const end: Pt = [c.v[c.v.length - 2], c.v[c.v.length - 1]];
+      if (Math.max(...xs) < x0 - 1 || Math.min(...xs) > x1 + 1) {
+        out.push(c);
+        cur = end;
+        continue;
+      }
+      const pts = flattenContour([{ t: 'M', v: cur }, c], undefined, 14, 12).slice(1);
+      for (const p of pts) out.push({ t: 'L', v: [p[0], p[1]] });
+      if (!pts.length || pts[pts.length - 1][0] !== end[0] || pts[pts.length - 1][1] !== end[1]) out.push({ t: 'L', v: end });
+      cur = end;
+    }
+    return out;
+  });
 }
 
 /** Apply per-point edits; returns contour list with moved control points. */
@@ -417,7 +463,8 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
     };
     const o = p.outline;
     if (!o.empty) {
-      const contours = applyPointEdits(o, edits[p.key]?.points);
+      let contours = applyPointEdits(o, edits[p.key]?.points);
+      if (p.stretch.band) contours = densify(contours, p.stretch.band[0], p.stretch.band[1]);
       const f = p.stretch.f;
       o.pieces.forEach((piece, j) => {
         const cs = piece.contours.map((i) => contours[i]);
@@ -428,12 +475,15 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
         } else {
           const dk = dotKey(p.key, j);
           const c = bboxCenter(piece.bbox);
-          const dShift = p.stretch.cutX !== undefined && c[0] < p.stretch.cutX ? -p.stretch.amount : 0;
-          const D = compose(editMat(edits[dk], [c[0] + dShift, c[1]]), translate(dShift, 0));
+          // dots ride along with the warped stroke beneath them
+          const moved = p.stretch.f && p.stretch.amount ? p.stretch.f(c[0], c[1]) : c;
+          const dShift = moved[0] - c[0];
+          const dLift = moved[1] - c[1];
+          const D = compose(editMat(edits[dk], [c[0] + dShift, c[1] + dLift]), translate(dShift, dLift));
           const dw = compose(world, D);
           const polys = cs.map((cc) => flattenContour(cc, undefined, 4, 60));
           laid.pieces.push({ key: dk, kind: 'dot', glyphKey: p.key, d: contoursToD(cs), world: dw, bbox: transformedBBox(polys, dw, { ...EMPTY_BBOX }) });
-          const del = addElem('dot', dk, world, [c[0] + dShift, c[1]], 'Dot');
+          const del = addElem('dot', dk, world, [c[0] + dShift, c[1] + dLift], 'Dot');
           del.bbox = unionBBox(del.bbox, laid.pieces[laid.pieces.length - 1].bbox);
         }
       });

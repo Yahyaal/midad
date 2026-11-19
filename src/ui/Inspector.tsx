@@ -1,6 +1,8 @@
 import { stylisticFeatures } from '../core/alternates';
 import { type Preview, useVariants, VariantPicker } from './VariantPicker';
 import { groupTarget, useWordStyles, WordStylePicker } from './WordStylePicker';
+import { HarakaPicker } from './HarakaPicker';
+import { takesHarakat } from '../core/harakat';
 import { FONTS, getLoadedFont } from '../core/fonts';
 import { type Pt, applyVec, det, invert } from '../core/geometry';
 import type { LaidBlock } from '../core/layout';
@@ -177,6 +179,16 @@ function SelectionPanel({
             </button>
           )}
           <FormsSection store={store} r={single} project={project} onPreview={onPreview} />
+          {(() => {
+            const b = project.blocks.find((x) => x.id === single.block);
+            const i = Number(single.key.slice(1).split('.')[0]);
+            return b && takesHarakat(b.text, i) ? (
+              <div className="alternates">
+                <span className="field-label">Ḥarakāt (tashkīl)</span>
+                <HarakaPicker store={store} project={project} r={single} onPreview={onPreview ?? (() => {})} layout="grid" />
+              </div>
+            ) : null;
+          })()}
         </>
       )}
     </Section>

@@ -42,7 +42,7 @@ export function tidyScope(store: Store, layouts: Map<string, LaidBlock>) {
 }
 
 export function runTidy(original: Project, strength: number, blocks: string[], groups?: Map<string, Set<string>>) {
-  const total: TidyReport = { smoothed: 0, kashidas: 0, forms: 0, spaced: 0, dots: 0 };
+  const total: TidyReport = { pen: 0, smoothed: 0, kashidas: 0, forms: 0, spaced: 0, dots: 0 };
   const next: Project = {
     ...original,
     blocks: original.blocks.map((b) => {

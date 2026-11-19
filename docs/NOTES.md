@@ -72,6 +72,17 @@ stretchy final letter, or kashida on the flattest join. A look is only offered w
 the font's rendering. Styles only touch form fields (swap, stretch, kashida), never moves. Results are
 cached per word; letter forms are pre-collected in idle time so the strip opens quickly.
 
+## Pen feel and ḥarakāt (v0.7)
+* **Madd** is now a smooth warp of a band left of the cut (segments there are densified first), with a
+  slight sag, instead of sliding the left part out as a ruler-straight bar. Dots ride along.
+* **Tidy pen passes** run first: sideways scaling of a letter (sx ≫ sy) becomes madd so stroke
+  contrast is kept; overall letter sizes are smoothed along each word so a big letter ramps into its
+  neighbours; kashidas get a slight downward bend and a thinner waist; swaps saved for another font are
+  dropped.
+* **Ḥarakāt**: the letter strip has *Shape* and *حركة Haraka* tabs; choosing a ḥaraka rewrites the
+  marks after that letter in the text (edits on later letters are remapped), so it is shaped and
+  positioned by the font and remains movable in *Dots & marks* mode.
+
 ## Known limits
 * Word styles occasionally pick a compact combination where one letter just touches another (e.g. ل over خ).
 * Pulling letters along steep joins can leave small shards where the pen stroke meets the outline.

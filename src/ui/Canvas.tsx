@@ -4,6 +4,8 @@ import type { LaidBlock } from '../core/layout';
 import { type Edit, type ElemRef, type Project, refId } from '../core/model';
 import { type Preview, useVariants, VariantPicker } from './VariantPicker';
 import { neighbourWeights, seamlessTargets } from './linked';
+import { HarakaPicker } from './HarakaPicker';
+import { takesHarakat } from '../core/harakat';
 import { groupTarget, useWordStyles, WordStylePicker } from './WordStylePicker';
 import { getEdit, sameRef, setEdit, type Store, useStore } from '../core/store';
 import { Artwork } from './Artwork';
@@ -475,6 +477,11 @@ export function Canvas({
   const single = selection.length === 1 ? selection[0] : null;
   const letterSel = single && single.kind === 'glyph' && mode === 'letter' && !curveEdit ? single : null;
   const variants = useVariants(realProject, letterSel);
+  const [stripTab, setStripTab] = useState<'shape' | 'haraka'>('shape');
+  const harakaOk = !!letterSel && (() => {
+    const b = realProject.blocks.find((x) => x.id === letterSel.block);
+    return !!b && takesHarakat(b.text, Number(letterSel.key.slice(1).split('.')[0]));
+  })();
   const groupT = single && (mode === 'group' || mode === 'word') ? groupTarget(realProject, single) : null;
   const wordStylesList = useWordStyles(realProject, groupT);
   const showTransformHandles = bb && selection.length > 0 && !selection.every((r) => r.kind === 'join');
@@ -529,7 +536,7 @@ export function Canvas({
           <WordStylePicker store={store} project={realProject} target={groupT} styles={wordStylesList} onPreview={onPreview ?? (() => {})} layout="strip" />
         </div>
       )}
-      {letterSel && bb && variants.length > 1 && !dragging && (
+      {letterSel && bb && !dragging && (variants.length > 1 || harakaOk) && (
         <div
           className="variant-float"
           style={stripPos(floatStyle(bb, view, wrapRef.current))}
@@ -540,7 +547,25 @@ export function Canvas({
             setStripTick((t) => t + 1);
           }}
         >
-          <VariantPicker store={store} project={realProject} r={letterSel} variants={variants} onPreview={onPreview ?? (() => {})} layout="strip" />
+          <div className="strip-card">
+            <div className="strip-tabs" role="tablist">
+              {variants.length > 1 && (
+                <button type="button" role="tab" aria-selected={stripTab === 'shape'} className={stripTab === 'shape' ? 'on' : ''} onClick={() => setStripTab('shape')}>
+                  Shape
+                </button>
+              )}
+              {harakaOk && (
+                <button type="button" role="tab" aria-selected={stripTab === 'haraka' || variants.length < 2} className={stripTab === 'haraka' || variants.length < 2 ? 'on' : ''} onClick={() => setStripTab('haraka')}>
+                  <span lang="ar">حركة</span> Haraka
+                </button>
+              )}
+            </div>
+            {stripTab === 'haraka' || variants.length < 2 ? (
+              <HarakaPicker store={store} project={realProject} r={letterSel} onPreview={onPreview ?? (() => {})} layout="strip" />
+            ) : (
+              <VariantPicker store={store} project={realProject} r={letterSel} variants={variants} onPreview={onPreview ?? (() => {})} layout="strip" />
+            )}
+          </div>
         </div>
       )}
     </div>
