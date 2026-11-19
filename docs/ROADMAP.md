@@ -15,7 +15,7 @@ forms, madd/kashida, dots, path points and export — its gaps are *composition*
 (*tarkīb*), mirror-image *musannā* compositions, justified panels where kashida fills each line, and the
 second ink colour often used for vowel marks in manuscripts.
 
-## Plan (in priority order)
+## Plan (in priority order) — status: all eight built, Nov 19
 
 | # | Feature | Why |
 |---|---------|-----|
@@ -30,3 +30,22 @@ second ink colour often used for vowel marks in manuscripts.
 
 Later candidates: Arabic UI language, decorative frames/ornaments, version history, per-word colours,
 sharing links, Quran text picker with verse lookup.
+
+## Done (overnight, Nov 19)
+
+1. Faster selection — double-click/double-tap grows, breadcrumb, Esc steps down, Ctrl/⌘-click deep select,
+   pressing on any part of a selected word drags the whole word.
+2. Arrange on an arc (−100…+100 %) or around a circle (wrap 30–98 %); connected groups move rigidly.
+3. Justify with kashida for multi-line text (1–3 mid-word joins in the longest words per line).
+4. Artboard presets (wide, square/portrait post, story, A4 portrait/landscape, banner), centred resize.
+5. Second colour for ḥarakāt (optionally dots).
+6. ⇋ Mirror copy (musannā) in Layers.
+7. Smart guides for word/group/block drags (artboard centre lines, other blocks' centres/baselines).
+8. First-run welcome with four tips and quick starts; phone layout pass for the new overlays.
+
+## Next ideas
+* Roundel helper: auto-size the circle so words never collide; text inside vs outside the ring.
+* Arabic interface language (RTL UI).
+* Decorative frames, rules and medallions around compositions.
+* Version history / named snapshots per project.
+* Per-word colour and gold highlights.
