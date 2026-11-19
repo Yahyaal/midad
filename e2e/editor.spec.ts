@@ -299,25 +299,38 @@ test('word styles: preview on hover, apply on click, undo restores', async ({ pa
   await expect.poll(wordSig).toBe(before);
 });
 
-test('a letter’s Haraka tab adds, changes and removes tashkīl, with undo', async ({ page }) => {
+test('a letter’s Haraka tab: vowel plus shadda toggle, only valid choices, with undo', async ({ page }) => {
   await page.getByRole('button', { name: /Letter/ }).click();
-  const p = await pointOn(page, 'c1.0');
+  const p = await pointOn(page, 'c1.0'); // ح inside يحيى
   await page.mouse.click(p.x, p.y);
   await page.getByRole('tab', { name: /Haraka/ }).click();
-  const opts = page.locator('.variant-float .variant.haraka');
-  await expect(opts.first()).toHaveAttribute('aria-selected', 'true');
-  await opts.filter({ hasText: 'Fatḥa' }).click();
+  const vowels = page.locator('.variant-float .variant.haraka:not(.shadda-toggle)');
+  await expect(vowels).toHaveCount(5); // none, fatha, damma, kasra, sukun — no tanwin mid-word
+  await vowels.filter({ hasText: 'Fatḥa' }).click();
   await expect(page.locator('.text-input')).toHaveValue('يحَيى، سامي، رامي');
-  await expect(page.locator('[data-kind="mark"]')).toHaveCount(1);
-  await opts.filter({ hasText: 'Shadda u' }).click();
-  await expect(page.locator('.text-input')).toHaveValue('يح\u0651\u064fيى، سامي، رامي');
+  await page.locator('.variant-float').getByRole('switch').click();
+  await expect(page.locator('.text-input')).toHaveValue('يح\u0651\u064eيى، سامي، رامي');
   await expect(page.locator('[data-kind="mark"]')).toHaveCount(2);
-  await opts.filter({ hasText: 'None' }).click();
+  await vowels.filter({ hasText: 'Sukūn' }).click(); // sukun drops the shadda
+  await expect(page.locator('.text-input')).toHaveValue('يح\u0652يى، سامي، رامي');
+  await vowels.filter({ hasText: 'None' }).click();
   await expect(page.locator('.text-input')).toHaveValue('يحيى، سامي، رامي');
   await page.mouse.move(5, 300);
-  await page.keyboard.press('Control+z');
-  await expect(page.locator('.text-input')).toHaveValue(/يح.+يى، سامي، رامي/);
-  await page.keyboard.press('Control+z');
+  for (let i = 0; i < 3; i++) await page.keyboard.press('Control+z');
+  await expect(page.locator('.text-input')).toHaveValue('يح\u0651\u064eيى، سامي، رامي'.slice(0, 0) + 'يحَيى، سامي، رامي');
   await page.keyboard.press('Control+z');
   await expect(page.locator('.text-input')).toHaveValue('يحيى، سامي، رامي');
+});
+
+test('the alif inside سامي offers no ḥaraka and says why; the last letter offers tanwīn', async ({ page }) => {
+  await page.getByRole('button', { name: /Letter/ }).click();
+  let p = await pointOn(page, 'c7.0');
+  await page.mouse.click(p.x, p.y);
+  await page.getByRole('tab', { name: /Haraka/ }).click().catch(() => {});
+  await expect(page.locator('.variant-float .variant.haraka')).toHaveCount(1);
+  await expect(page.locator('.variant-float .haraka-note')).toContainText('long vowel');
+  p = await pointOn(page, 'c9.0'); // final ي of سامي
+  await page.mouse.click(p.x, p.y);
+  await page.getByRole('tab', { name: /Haraka/ }).click();
+  await expect(page.locator('.variant-float .variant.haraka', { hasText: 'Tanwīn u' })).toBeVisible();
 });

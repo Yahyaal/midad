@@ -83,6 +83,16 @@ cached per word; letter forms are pre-collected in idle time so the strip opens 
   marks after that letter in the text (edits on later letters are remapped), so it is shaped and
   positioned by the font and remains movable in *Dots & marks* mode.
 
+## Ḥarakāt rules (v0.8)
+The Haraka tab is one vowel choice plus a Shadda toggle (shadda + vowel, shadda + tanwīn at word end;
+never shadda + sukūn). Offered per letter and position:
+* inside a word: fatḥa, ḍamma, kasra, sukūn (+ shadda);
+* first letter of a word: no sukūn, no shadda;
+* last letter: also the three tanwīn; the letter before a final ا or ى: tanwīn fatḥ (كتابًا، هُدًى);
+* ا: none inside a word (long vowel); fatḥa/kasra at a word's start · أ: fatḥa, ḍamma, sukūn ·
+  إ: kasra · آ، ى، ٱ: none · ة: vowels and tanwīn, no sukūn/shadda;
+* dagger alif only on ه ذ ل م ن ك و (هٰذا، ذٰلك، الرحمٰن، لٰكن).
+
 ## Known limits
 * Word styles occasionally pick a compact combination where one letter just touches another (e.g. ل over خ).
 * Pulling letters along steep joins can leave small shards where the pen stroke meets the outline.

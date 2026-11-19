@@ -1006,3 +1006,21 @@ kbd {
 .variant-picker.grid .variant.haraka {
   width: auto;
 }
+.shadda-toggle {
+  margin-inline-start: 6px;
+  border-style: dashed;
+}
+.shadda-toggle.on {
+  border-style: solid;
+  background: #fff7ef;
+}
+.haraka-note {
+  margin: 0;
+  padding: 0 10px 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+  max-width: 420px;
+}
+.haraka-wrap.grid .haraka-note {
+  padding: 4px 0 0;
+}
