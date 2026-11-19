@@ -1220,3 +1220,24 @@ kbd {
     font-size: 38px;
   }
 }
+.short-label {
+  display: none;
+}
+@media (max-width: 820px) {
+  .crumb-label {
+    display: none;
+  }
+  .crumb.on .crumb-label {
+    display: inline;
+  }
+  .crumbs {
+    top: 6px;
+  }
+  .long-label,
+  .guides-toggle {
+    display: none;
+  }
+  .short-label {
+    display: inline;
+  }
+}

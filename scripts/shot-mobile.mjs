@@ -1,0 +1,25 @@
+// Phone screenshots of key flows: node scripts/shot-mobile.mjs outdir
+import { chromium, devices } from '@playwright/test';
+const [dir] = process.argv.slice(2);
+const b = await chromium.launch();
+const ctx = await b.newContext({ ...devices['Pixel 7'] });
+const p = await ctx.newPage();
+await p.goto('http://localhost:5179/');
+await p.evaluate(() => localStorage.clear());
+await p.goto('http://localhost:5179/');
+await p.waitForSelector('[data-piece]');
+await p.screenshot({ path: `${dir}/m-welcome.png` });
+await p.getByRole('button', { name: 'Just let me explore' }).click();
+const pointOn = (key) => p.evaluate((key) => { const el = document.querySelector(`[data-piece="${key}"]`); const r = el.getBoundingClientRect(); for (let fy = 0.5; fy < 1; fy += 0.04) for (const s of [1, -1]) { const y = r.y + r.height * (0.5 + (fy - 0.5) * s); for (let fx = 0.05; fx < 0.96; fx += 0.03) { const x = r.x + r.width * fx; const hit = document.elementFromPoint(x, y); if (hit?.dataset?.piece === key) return { x, y }; } } return null; }, key);
+await p.getByRole('button', { name: /حرف/ }).click();
+const pt = await pointOn('c1.0');
+await p.mouse.click(pt.x, pt.y);
+await p.waitForTimeout(300);
+await p.screenshot({ path: `${dir}/m-letter.png` });
+await p.getByRole('tab', { name: /Haraka/ }).click();
+await p.waitForTimeout(200);
+await p.screenshot({ path: `${dir}/m-haraka.png` });
+await p.getByRole('button', { name: /Edit panel/ }).click();
+await p.waitForTimeout(300);
+await p.screenshot({ path: `${dir}/m-panel.png` });
+await b.close();

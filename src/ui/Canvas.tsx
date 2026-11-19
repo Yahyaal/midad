@@ -691,11 +691,16 @@ function floatStyle(b: BBox, v: View, wrap: HTMLDivElement | null): React.CSSPro
 function Breadcrumb({ store, layouts }: { store: Store; layouts: Map<string, LaidBlock> }) {
   const anchor = useStore(store, (s) => s.anchor);
   const selection = useStore(store, (s) => s.selection);
+  const navRef = useRef<HTMLElement>(null);
+  // keep the current level in view on narrow screens
+  useEffect(() => {
+    navRef.current?.querySelector('.crumb.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  });
   if (!anchor || selection.length !== 1 || selection[0].block !== anchor.block) return null;
   const levels = levelsFor(layouts, anchor);
   if (!levels.some((l) => sameRef(l.ref, selection[0]))) return null;
   return (
-    <nav className="crumbs" aria-label="Selection level">
+    <nav className="crumbs" aria-label="Selection level" ref={navRef}>
       {[...levels].reverse().map((l, i) => {
         const on = sameRef(l.ref, selection[0]);
         return (

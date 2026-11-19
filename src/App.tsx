@@ -172,10 +172,11 @@ function ModeBar({ store }: { store: Store }) {
       <span className="spacer" />
       {mode === 'letter' && (
         <label className="check compact" title="Dragging a letter pulls its joined neighbours along so the word bends smoothly (hold Alt to move it alone)">
-          <input type="checkbox" checked={follow} onChange={(e) => store.set({ follow: e.target.checked })} /> Neighbours follow
+          <input type="checkbox" checked={follow} onChange={(e) => store.set({ follow: e.target.checked })} /> <span className="long-label">Neighbours follow</span>
+          <span className="short-label">Follow</span>
         </label>
       )}
-      <label className="check compact" title="Show baselines">
+      <label className="check compact guides-toggle" title="Show baselines">
         <input type="checkbox" checked={showGuides} onChange={(e) => store.set({ showGuides: e.target.checked })} /> Guides
       </label>
     </nav>
