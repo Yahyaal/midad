@@ -25,6 +25,9 @@ export const EDIT_CASES: [string, string, Record<string, Edit>][] = [
   ['pen-mid', 'يحيى', { 'c2.0': { stretch: 487 } }],
   ['pen-user', 'يحيى، سامي، رامي', { 'c0.0': { tx: 244, ty: -89, sx: 2.245 }, 'c1.0': { tx: 42, ty: -45 }, 'c2.0': { tx: 17, ty: -18, stretch: 487, swap: 'amiri:3992' }, 'c3.0': { stretch: 750 }, 'c7.0': { tx: 38, ty: 233, sx: 1.95, sy: 1.95 }, 'c6.0': { tx: 323, ty: -132 } }],
   ['pen-user-tidy', 'يحيى، سامي، رامي', { 'c0.0': { tx: 244, ty: -89, sx: 2.245 }, 'c1.0': { tx: 42, ty: -45 }, 'c2.0': { tx: 17, ty: -18, stretch: 487, swap: 'amiri:3992' }, 'c3.0': { stretch: 750 }, 'c7.0': { tx: 38, ty: 233, sx: 1.95, sy: 1.95 }, 'c6.0': { tx: 323, ty: -132 } }],
+  ['arc-up', 'يحيى، سامي، رامي', {}],
+  ['arc-down', 'يحيى، سامي، رامي', {}],
+  ['arc-circle', 'الخَطُّ هَنْدَسَةٌ رُوحَانِيَّةٌ ظَهَرَتْ بِآلَةٍ جِسْمَانِيَّةٍ', {}],
   ['user-move', 'يحيى', { 'c0.0': { tx: 636, ty: 530 }, 'c1.0': { tx: 80, ty: 265 }, 'c2.0': { tx: 32, ty: 106 } }],
 ];
 
@@ -37,6 +40,10 @@ it.skipIf(!process.env.DUMP_DIR)('dump edit sheet', () => {
     const row = Math.floor(i / 5);
     const big = label.startsWith('tidy') || label.startsWith('pen');
     let blk = newBlock({ text, size: big ? 130 : 230, align: 'center', x: big ? 950 : 190 + col * 380, y: big ? (label === 'pen-user-tidy' ? 330 : 260 + ['pen-madd', 'pen-mid', 'pen-user'].indexOf(label) * 330) : 260 + row * 420, edits });
+    if (label.startsWith('arc')) {
+      blk = { ...blk, size: 110, x: 950, y: label === 'arc-up' ? 330 : label === 'arc-down' ? 520 : 1000, arrange: label === 'arc-circle' ? { shape: 'circle', bend: 0.9 } : { shape: 'arc', bend: label === 'arc-up' ? 0.45 : -0.35 } };
+      if (label === 'arc-circle') blk.size = 90;
+    }
     const lb = layoutBlock(blk, font);
     if (label === 'tidy-before' || label === 'pen-user-tidy') {
       for (const [st, y] of [[0.4, 650], [0.7, 950], [1, 1220]] as const) {

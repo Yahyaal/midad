@@ -290,8 +290,53 @@ function BlockPanel({ store, block, layouts }: { store: Store; block: Block; lay
             { id: 'right', label: 'Right', title: 'Anchor at the right (start of line)' },
             { id: 'center', label: 'Centre' },
             { id: 'left', label: 'Left' },
+            ...(block.text.includes('\n') ? [{ id: 'justify' as const, label: 'Justify', title: 'Fill shorter lines with kashida so all lines match' }] : []),
           ]}
         />
+      </div>
+      <div className="field">
+        <span className="field-label">Arrange</span>
+        <Segmented
+          label="Arrange"
+          value={block.arrange?.shape ?? 'line'}
+          onChange={(v) =>
+            upd((b) => ({
+              ...b,
+              arrange: v === 'line' ? undefined : { shape: v, bend: v === 'circle' ? 0.9 : (b.arrange?.shape === 'arc' ? b.arrange.bend : 0.35) },
+            }))
+          }
+          options={[
+            { id: 'line', label: 'Line' },
+            { id: 'arc', label: 'Arc', title: 'Lay the text along an arch or a curve' },
+            { id: 'circle', label: 'Circle', title: 'A roundel: text around a circle' },
+          ]}
+        />
+        {block.arrange?.shape === 'arc' && (
+          <Slider
+            store={store}
+            label="Curve"
+            hint="Positive arches up, negative curves down"
+            value={Math.round(block.arrange.bend * 100)}
+            min={-100}
+            max={100}
+            step={1}
+            format={(v) => `${v > 0 ? '+' : ''}${v}%`}
+            onChange={(v) => upd((b) => ({ ...b, arrange: { shape: 'arc', bend: v / 100 || 0.01 } }), false)}
+          />
+        )}
+        {block.arrange?.shape === 'circle' && (
+          <Slider
+            store={store}
+            label="Wrap"
+            hint="How much of the circle the text covers"
+            value={Math.round(Math.abs(block.arrange.bend) * 100)}
+            min={30}
+            max={98}
+            step={1}
+            format={(v) => `${v}%`}
+            onChange={(v) => upd((b) => ({ ...b, arrange: { shape: 'circle', bend: v / 100 } }), false)}
+          />
+        )}
       </div>
       {feats.length > 0 && (
         <div className="features">

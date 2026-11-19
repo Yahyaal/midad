@@ -100,3 +100,34 @@ describe('bridgePath', () => {
     expect(d.endsWith('Z')).toBe(true);
   });
 });
+
+describe('arrangements', () => {
+  const font = () => nodeFont('amiri');
+  it('an arc lowers the ends, keeps words joined and rotates them along the curve', () => {
+    const plain = layoutBlock(newBlock({ text: 'يحيى، سامي، رامي' }), font());
+    const arc = layoutBlock(newBlock({ text: 'يحيى، سامي، رامي', arrange: { shape: 'arc', bend: 0.4 } }), font());
+    const y = (lb: typeof plain, k: string) => lb.glyphs.find((g) => g.key === k)!.world[5];
+    expect(y(arc, 'c0.0') - y(plain, 'c0.0')).toBeGreaterThan(5); // right end drops (screen y grows)
+    expect(y(arc, 'c15.0') - y(plain, 'c15.0')).toBeGreaterThan(5); // left end drops
+    expect(arc.joins.every((j) => j.d === '')).toBe(true);
+    const rot = (lb: typeof plain, k: string) => Math.atan2(lb.glyphs.find((g) => g.key === k)!.world[1], lb.glyphs.find((g) => g.key === k)!.world[0]);
+    expect(Math.sign(rot(arc, 'c0.0'))).toBe(-Math.sign(rot(arc, 'c15.0')));
+  });
+
+  it('a negative bend curves the other way', () => {
+    const plain = layoutBlock(newBlock({ text: 'يحيى، سامي، رامي' }), font());
+    const arc = layoutBlock(newBlock({ text: 'يحيى، سامي، رامي', arrange: { shape: 'arc', bend: -0.4 } }), font());
+    expect(arc.glyphs[0].world[5]).toBeLessThan(plain.glyphs[0].world[5]);
+  });
+
+  it('justify fills shorter lines with kashida so lines match', () => {
+    const text = 'الصبر مفتاح الفرج\nمن جد وجد';
+    const lb = layoutBlock(newBlock({ text, align: 'justify' }), font());
+    const width = (line: number) => {
+      const xs = lb.glyphs.filter((g) => g.line === line && !g.outline.empty).flatMap((g) => g.pieces.map((p) => [p.bbox.x0, p.bbox.x1])).flat();
+      return Math.max(...xs) - Math.min(...xs);
+    };
+    expect(Math.abs(width(0) - width(1))).toBeLessThan(width(0) * 0.06);
+    expect(lb.joins.filter((j) => j.d && j.edit.extend).length).toBeGreaterThan(0);
+  });
+});

@@ -40,7 +40,9 @@ export interface Block {
   y: number;
   /** line gap as a fraction of the font size */
   lineHeight: number;
-  align: 'right' | 'center' | 'left';
+  align: 'right' | 'center' | 'left' | 'justify';
+  /** Lay the text along a curve: an arc (bend −1..1, + arches up) or a full circle (roundel). */
+  arrange?: { shape: 'arc' | 'circle'; bend: number };
   /** OpenType features enabled for the whole block, e.g. ["ss01"] */
   features: string[];
   /** Whole-block transform (pivot = block centre). */
@@ -230,6 +232,7 @@ export function validateProject(x: unknown): Project {
     b.transform ??= {};
     b.features ??= [];
     b.align ??= 'center';
+    if (b.arrange && (typeof b.arrange.bend !== 'number' || !['arc', 'circle'].includes(b.arrange.shape))) delete b.arrange;
     b.lineHeight ??= 1.6;
   }
   p.ink = { ...DEFAULT_INK, ...p.ink };

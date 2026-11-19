@@ -325,6 +325,7 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
     baseKey: string;
   }
   const pre: Pre[] = [];
+  const virtualExtend = justifyKashida(block, lines, seg, upem);
   for (const line of lines) {
     let lastBase: Pre | null = null;
     let shift = 0;
@@ -354,6 +355,7 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
         if (lastBase) {
           const j = edits[joinKey(lastBase.key)];
           if (j?.extend) shift -= j.extend;
+          shift -= virtualExtend.get(joinKey(lastBase.key)) ?? 0;
         }
         p.shift = shift;
         shift -= p.stretch.amount;
@@ -389,6 +391,44 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
     blockNat = unionBBox(blockNat, nb);
   }
 
+  // Curved arrangements: each connected group is placed rigidly along an arc (joins stay intact).
+  const arrangeOf = new Map<string, Mat>();
+  if (block.arrange && block.arrange.bend) {
+    const lineOfGroup = new Map<string, number>();
+    for (const p of pre) {
+      const gi = seg.groupOf[p.g.cluster];
+      if (gi >= 0 && !lineOfGroup.has(groupKey(gi))) lineOfGroup.set(groupKey(gi), p.g.line);
+    }
+    const lineSpan = new Map<number, [number, number]>();
+    for (const [gk, box] of groupBoxes) {
+      const li = lineOfGroup.get(gk) ?? 0;
+      const sp = lineSpan.get(li) ?? [Infinity, -Infinity];
+      lineSpan.set(li, [Math.min(sp[0], box.x0), Math.max(sp[1], box.x1)]);
+    }
+    const widest = Math.max(...[...lineSpan.values()].map(([a, b]) => b - a), 1);
+    const sign = Math.sign(block.arrange.bend) || 1;
+    // total angle covered by the widest line
+    const theta = block.arrange.shape === 'circle' ? sign * 2 * Math.PI * Math.min(0.98, Math.max(0.3, Math.abs(block.arrange.bend))) : block.arrange.bend * Math.PI;
+    const R0 = widest / theta; // signed: + centre below (arch), − centre above (smile)
+    const lh = block.lineHeight * upem;
+    for (const [gk, box] of groupBoxes) {
+      const li = lineOfGroup.get(gk) ?? 0;
+      const sp = lineSpan.get(li)!;
+      const mid = (sp[0] + sp[1]) / 2;
+      const baseY = -li * lh;
+      // concentric lines share the centre of the first line's circle
+      const R = R0 - li * lh;
+      const u = (box.x0 + box.x1) / 2 - mid;
+      const a = u / R;
+      const X = mid + R * Math.sin(a);
+      // a roundel is centred on the block's anchor; an arc keeps its middle on the baseline
+      const Y = -li * lh + (R * Math.cos(a) - R) + (block.arrange.shape === 'circle' ? R0 * 0.55 : 0);
+      const cx = (box.x0 + box.x1) / 2;
+      // rotate the group about its baseline centre, then move that point onto the arc
+      arrangeOf.set(gk, compose(translate(X, Y), rotate((-a * 180) / Math.PI), translate(-cx, -baseY)));
+    }
+  }
+
   const base0: Mat = compose(translate(block.x, block.y), scale(k, -k));
   const blockPivot = bboxValid(blockNat) ? apply(base0, bboxCenter(blockNat)) : ([block.x, block.y] as Pt);
   const B = compose(editMat(block.transform, blockPivot), base0);
@@ -422,7 +462,8 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
     const gBox = groupBoxes.get(gk);
     const W = wk && wBox ? editMat(edits[wk], bboxCenter(wBox)) : IDENTITY;
     const G = gk && gBox ? editMat(edits[gk], bboxCenter(gBox)) : IDENTITY;
-    const wg = compose(W, G);
+    const A = gk ? (arrangeOf.get(gk) ?? IDENTITY) : IDENTITY;
+    const wg = compose(W, A, G);
     WG.set(p.key, wg);
     const nb = natBox(p);
     const pivot = bboxValid(nb) ? bboxCenter(nb) : p.origin;
@@ -503,7 +544,7 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
       el.bbox = unionBBox(el.bbox, allBox);
     }
     if (gk && gBox) {
-      const el = addElem('group', gk, compose(B, W), bboxCenter(gBox), 'Connected group');
+      const el = addElem('group', gk, compose(B, W, gk ? (arrangeOf.get(gk) ?? IDENTITY) : IDENTITY), bboxCenter(gBox), 'Connected group');
       el.bbox = unionBBox(el.bbox, allBox);
     }
     if (wk && wBox) {
@@ -537,7 +578,8 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
       const pa = preByKey.get(glyphKey(a.cluster, a.k))!;
       const pb = preByKey.get(glyphKey(b.cluster, b.k))!;
       const jk = joinKey(pa.key);
-      const je = edits[jk] ?? {};
+      const vx = virtualExtend.get(jk) ?? 0;
+      const je: Edit = vx ? { ...edits[jk], extend: (edits[jk]?.extend ?? 0) + vx } : (edits[jk] ?? {});
       const cNat = contact(font, a, b, [a.x, pa.origin[1]], [b.x, pb.origin[1]]);
       // contact in each glyph's outline coords
       const toA = (p: Pt): Pt => [p[0] - a.x, p[1] - pa.origin[1]];
@@ -602,6 +644,49 @@ export function layoutBlock(block: Block, font: LoadedFont): LaidBlock {
 function unit(v: Pt): Pt {
   const l = Math.hypot(v[0], v[1]) || 1;
   return [v[0] / l, v[1] / l];
+}
+
+/**
+ * Justified text, the calligrapher's way: shorter lines are filled with kashida
+ * in one to three joins (in the longest words, mid-word) rather than with space.
+ */
+function justifyKashida(block: Block, lines: ShapedLine[], seg: Segmentation, upem: number): Map<string, number> {
+  const out = new Map<string, number>();
+  if (block.align !== 'justify' || lines.length < 2) return out;
+  const userExtra = (line: ShapedLine) => {
+    let e = 0;
+    for (const g of line.glyphs) {
+      const key = glyphKey(g.cluster, g.k);
+      e += block.edits[joinKey(key)]?.extend ?? 0;
+      e += block.edits[key]?.stretch ?? 0;
+    }
+    return e;
+  };
+  const widths = lines.map((l) => l.width + userExtra(l));
+  const target = Math.max(...widths);
+  lines.forEach((line, li) => {
+    const missing = target - widths[li];
+    if (missing < upem * 0.15) return;
+    // joins of this line, grouped by word
+    const bases = line.glyphs.filter((g) => !g.isMark);
+    const byWord = new Map<number, string[]>();
+    for (let i = 0; i + 1 < bases.length; i++) {
+      const a = bases[i];
+      const b = bases[i + 1];
+      const ga = seg.groupOf[a.cluster];
+      if (ga < 0 || ga !== seg.groupOf[b.cluster]) continue;
+      const w = seg.wordOf[a.cluster];
+      byWord.set(w, [...(byWord.get(w) ?? []), joinKey(glyphKey(a.cluster, a.k))]);
+    }
+    const words = [...byWord.values()].sort((x, y) => y.length - x.length);
+    if (!words.length) return;
+    const n = Math.min(words.length, Math.max(1, Math.ceil(missing / (upem * 0.9))), 3);
+    for (let i = 0; i < n; i++) {
+      const js = words[i];
+      out.set(js[Math.floor((js.length - 1) / 2)], missing / n);
+    }
+  });
+  return out;
 }
 
 function invertSafe(m: Mat): Mat {
